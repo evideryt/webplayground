@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMERGENCY ALERT SYSTEM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        :root {
+            --eas-blue: #0039A6;
+            --eas-red: #D52B1E;
+            --eas-white: #FFFFFF;
+            --eas-bg: #000000;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: var(--eas-bg);
+            color: var(--eas-white);
+            font-family: 'Press Start 2P', 'Courier New', monospace;
+            overflow: hidden;
+        }
+
+        /* --- Стартовый экран --- */
+        #start-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--eas-bg);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            cursor: pointer;
+            text-align: center;
+        }
+        #start-overlay .start-text {
+            font-size: clamp(1.5em, 5vw, 2em);
+            text-shadow: 2px 2px 0px var(--eas-red), -2px -2px 0px var(--eas-blue);
+            animation: blinker 1.5s step-end infinite;
+        }
+        #start-overlay .start-subtext {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 20px;
+        }
+        
+        /* --- Основной экран --- */
+        .screen {
+            display: none; /* Изначально скрыт, покажем после клика */
+            position: relative;
+            width: 100%; height: 100%;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            box-shadow: inset 0 0 10vw 2vw rgba(0, 0, 0, 0.7);
+            border-radius: 20px / 40px;
+            animation: vhs-flicker 0.1s infinite alternate;
+        }
+
+        .screen::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(transparent, transparent 2px, rgba(255, 255, 255, 0.05) 2px, rgba(255, 255, 255, 0.05) 4px);
+            pointer-events: none; z-index: 2;
+        }
+
+        .screen::after {
+            content: ""; position: absolute; top: -10%; left: -10%;
+            width: 120%; height: 120%;
+            background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0) 0 25%, rgba(255, 255, 255, 0.02) 50%) 50% / 512px 512px;
+            opacity: 0.1; animation: vhs-noise 0.2s steps(2) infinite; z-index: 3; pointer-events: none;
+        }
+
+        .eas-container {
+            width: 95%; max-width: 800px; text-align: center;
+            border: 2px solid var(--eas-white); background-color: rgba(0, 0, 0, 0.5);
+            z-index: 5; padding: 10px; box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+            animation: vhs-warp 6s linear infinite; display: flex; flex-direction: column;
+            justify-content: space-between; min-height: 70vh;
+        }
+
+        .eas-header {
+            background-color: #333; padding: 10px; position: relative;
+            display: flex; height: 60px; border: 2px solid var(--eas-white); flex-shrink: 0;
+        }
+        .color-bar { flex: 1; }
+        .color-bar.white { background-color: var(--eas-white); }
+        .color-bar.blue { background-color: var(--eas-blue); }
+        .color-bar.red { background-color: var(--eas-red); }
+
+        .attention-text {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(1.5em, 5vw, 2em);
+            color: var(--eas-bg); background-color: var(--eas-white);
+            padding: 5px 20px; letter-spacing: 5px; animation: blinker 1s step-end infinite;
+        }
+
+        .message-area {
+            flex-grow: 1; display: flex; align-items: center;
+            justify-content: center; padding: 20px 0; min-height: 200px;
+        }
+
+        .message-part {
+            display: none; font-size: clamp(0.9em, 3vw, 1.2em);
+            line-height: 1.8; text-shadow: 2px 2px 0px var(--eas-red), -2px -2px 0px var(--eas-blue);
+        }
+
+        .message-part.active { display: block; }
+
+        .eas-timer { margin-top: 20px; flex-shrink: 0; }
+        .timer-label { display: block; font-size: 0.8em; color: #ccc; margin-bottom: 10px; }
+        #countdown { font-size: clamp(2em, 8vw, 3em); color: var(--eas-red); text-shadow: 0 0 10px var(--eas-red); letter-spacing: 5px; }
+
+        .eas-ticker {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background-color: var(--eas-bg); color: var(--eas-white);
+            padding: 10px 0; border-top: 2px solid var(--eas-white);
+            overflow: hidden; white-space: nowrap; z-index: 10;
+        }
+        .ticker-text { display: inline-block; padding-left: 100%; animation: marquee 30s linear infinite; }
+
+        .message-box {
+            display: none; position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background-color: #c0c0c0;
+            color: #000; border: 2px outset #fff; box-shadow: 2px 2px 0 #000;
+            padding: 20px 40px; z-index: 100; text-align: center; font-size: 1.5em;
+        }
+
+        @keyframes blinker { 50% { opacity: 0; } }
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-150%); } }
+        @keyframes vhs-flicker { 0% { opacity: 1; } 50% { opacity: 0.95; } 100% { opacity: 1; } }
+        @keyframes vhs-noise { 0%, 100% { transform: translate(0, 0); } 20% { transform: translate(-1%, 1%); } 40% { transform: translate(1%, -1%); } 60% { transform: translate(-1%, -1%); } 80% { transform: translate(1%, 1%); } }
+        @keyframes vhs-warp { 0% { transform: skewX(0) scale(1); } 49% { transform: skewX(0) scale(1); } 50% { transform: skewX(-0.5deg) scale(1.005); } 51% { transform: skewX(0) scale(1); } 99% { transform: skewX(0) scale(1); } 100% { transform: skewX(0.5deg) scale(0.995); } }
+    </style>
+</head>
+<body>
+
+    <div id="start-overlay">
+        <div class="start-text">[ НАЧАТЬ ТРАНСЛЯЦИЮ ]</div>
+        <div class="start-subtext">(требуется взаимодействие с пользователем для воспроизведения аудио)</div>
+    </div>
+
+    <div class="screen" id="main-screen">
+        <div class="eas-container">
+            <!-- (Содержимое EAS-контейнера такое же, как в прошлой версии) -->
+            <header class="eas-header">
+                <div class="color-bar white"></div>
+                <div class="color-bar blue"></div>
+                <div class="color-bar red"></div>
+                <div class="attention-text">ВНИМАНИЕ</div>
+            </header>
+            <div class="message-area">
+                <div class="message-part active">ЗАФИКСИРОВАНО ПРИБЛИЖЕНИЕ<br>К СОЛНЕЧНОЙ СИСТЕМЕ<br>НЕСТАБИЛЬНОГО ОБЛАКА АНТИЧАСТИЦ</div>
+                <div class="message-part">ПРИ КОНТАКТЕ С МАГНИТОСФЕРОЙ<br>НАЧНЕТСЯ КАСКАДНЫЙ АННИГИЛЯЦИОННЫЙ ПРОЦЕСС,<br>ВЫСВОБОЖДАЮЩИЙ ЭНЕРГИЮ,<br>ЭКВИВАЛЕНТНУЮ 10E24 ТРОТИЛА</div>
+                <div class="message-part">ПОСЛЕДСТВИЯ:<br>ПОЛНАЯ ДЕСТАБИЛИЗАЦИЯ<br>ПРОСТРАНСТВЕННО-ВРЕМЕННОГО КОНТИНУУМА.<br>ПРЕКРАЩЕНИЕ ВСЕХ БИОЛОГИЧЕСКИХ<br>И ЭЛЕКТРОННЫХ ФУНКЦИЙ.</div>
+                <div class="message-part">ЭВАКУАЦИЯ НЕВОЗМОЖНА.<br>УБЕЖИЩА БЕСПОЛЕЗНЫ.<br>СПАСЕНИЯ НЕТ.</div>
+                <div class="message-part">СООБЩЕНИЕ БУДЕТ ПОВТОРЯТЬСЯ<br>ДО ТЕХ ПОР,<br>ПОКА ЕГО НЕ СТАНЕТ<br>НЕКОМУ СМОТРЕТЬ.</div>
+            </div>
+            <div class="eas-timer">
+                <span class="timer-label">ОРИЕНТИРОВОЧНОЕ ВРЕМЯ ДО КОЛЛАПСА</span>
+                <div id="countdown">01:30</div>
+            </div>
+        </div>
+
+        <div class="eas-ticker">
+            <span class="ticker-text">...СИСТЕМЫ ЖИЗНЕОБЕСПЕЧЕНИЯ БУДУТ ОТКЛЮЧАТЬСЯ ПОСЛЕДОВАТЕЛЬНО... ИЗБЕГАЙТЕ ПАНИКИ... ВСЕ ЧАСТОТЫ БУДУТ ЗАГЛУШЕНЫ... ПОВТОРЯЕМ, ЭТО НЕ УЧЕНИЯ... ОСТАВАЙТЕСЬ НА МЕСТАХ... НЕ ПЫТАЙТЕСЬ ПОКИНУТЬ НАСЕЛЕННЫЕ ПУНКТы...</span>
+        </div>
+    </div>
+    
+    <div class="message-box" id="final-message">
+        а где
+    </div>
+
+    <!-- --- Аудиофайлы --- -->
+    <!-- Начальные тона EAS -->
+    <audio id="eas-tones" src="https://www.myinstants.com/media/sounds/eas-alert-tones-samedigital.mp3" preload="auto"></audio>
+    <!-- Фоновый шум/гул -->
+    <audio id="background-hum" src="https://www.myinstants.com/media/sounds/tv-static-sound-effect.mp3" loop preload="auto"></audio>
+    <!-- Звук в конце -->
+    <audio id="end-sound" src="https://www.myinstants.com/media/sounds/flatline-beep.mp3" preload="auto"></audio>
+
+    <script>
+        // Получаем ссылки на элементы
+        const startOverlay = document.getElementById('start-overlay');
+        const mainScreen = document.getElementById('main-screen');
+        const countdownElement = document.getElementById('countdown');
+        const finalMessageElement = document.getElementById('final-message');
+        const messageParts = document.querySelectorAll('.message-part');
+        
+        const easTones = document.getElementById('eas-tones');
+        const backgroundHum = document.getElementById('background-hum');
+        const endSound = document.getElementById('end-sound');
+
+        let messageInterval, timerInterval;
+
+        function startEasSequence() {
+            // --- Запускаем циклирование сообщений ---
+            let currentMessageIndex = 0;
+            messageInterval = setInterval(() => {
+                messageParts[currentMessageIndex].classList.remove('active');
+                currentMessageIndex = (currentMessageIndex + 1) % messageParts.length;
+                messageParts[currentMessageIndex].classList.add('active');
+            }, 8000);
+
+            // --- Запускаем таймер ---
+            let totalSeconds = 90;
+            timerInterval = setInterval(() => {
+                if (totalSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    countdownElement.textContent = "00:00";
+                    finalMessageElement.style.display = 'block';
+                    
+                    // Останавливаем фоновый шум и включаем финальный звук
+                    backgroundHum.pause();
+                    endSound.play();
+                    
+                    return;
+                }
+
+                totalSeconds--;
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                countdownElement.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        // --- Обработчик клика для старта ---
+        startOverlay.addEventListener('click', () => {
+            // Пытаемся воспроизвести аудио
+            easTones.play();
+            
+            // Начинаем фоновый гул после того, как тона закончатся
+            easTones.onended = () => {
+                backgroundHum.volume = 0.1; // Делаем фоновый шум тихим
+                backgroundHum.play();
+            };
+            
+            // Прячем стартовый экран и показываем основной
+            startOverlay.style.display = 'none';
+            mainScreen.style.display = 'flex';
+            
+            // Запускаем всю остальную логику
+            startEasSequence();
+
+        }, { once: true }); // Обработчик сработает только один раз
+    </script>
+</body>
+</html>
