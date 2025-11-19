@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vlonex Jump</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            background-image: 
+                linear-gradient(#cce0ff 1px, transparent 1px),
+                linear-gradient(90deg, #cce0ff 1px, transparent 1px);
+            background-size: 30px 30px;
+            background-position: -1px -1px;
+            font-family: 'Impact', sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 15px;
+            font-size: 30px;
+            color: black;
+            text-shadow: 2px 2px 0px white;
+        }
+
+        #clap-btn {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 80px;
+            height: 80px;
+            background: orange;
+            border: 3px solid black;
+            border-radius: 50%;
+            font-family: 'Impact';
+            font-size: 20px;
+            color: white;
+            display: none;
+            pointer-events: auto;
+            box-shadow: 0 4px 0 black;
+        }
+        #clap-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 black;
+        }
+
+        #red-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.4);
+            display: none;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        #mom-alert {
+            position: absolute;
+            top: 20%;
+            width: 100%;
+            text-align: center;
+            font-size: 40px;
+            color: yellow;
+            text-shadow: 3px 3px 0 #000;
+            display: none;
+            z-index: 6;
+        }
+
+        #menu-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        h1 { font-size: 50px; margin: 0; color: #333; }
+        p { font-size: 20px; margin: 10px 20px; }
+        
+        button.start-btn {
+            background: #4CAF50;
+            border: none;
+            padding: 15px 32px;
+            text-align: center;
+            display: inline-block;
+            font-size: 24px;
+            margin: 20px 2px;
+            cursor: pointer;
+            font-family: 'Impact';
+            color: white;
+            border: 2px solid black;
+        }
+        
+        .serif-font {
+            font-family: "Times New Roman", Times, serif;
+            font-style: italic;
+            letter-spacing: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+    <div id="red-screen"></div>
+    <div id="mom-alert">ЖИРНАЯ МАМАША<br>ВЛОНЕКФА АТАКУЕТ!</div>
+
+    <div id="ui-layer">
+        <div id="score">0</div>
+        <button id="clap-btn">JUMP!<br><span id="clap-count">0</span></button>
+    </div>
+
+    <div id="menu-screen">
+        <h1 id="title-text">Vlonex Jump</h1>
+        <p id="desc-text">Управление пальцем.<br>Физика замедлена для кайфа.</p>
+        <div id="gameover-text" style="display:none;"></div>
+        <button class="start-btn" onclick="startGame()">ПОГНАЛИ</button>
+    </div>
+
+<script>
+/* 
+=================================================================
+   КОНФИГ (НАСТРОЙКИ)
+   Теперь адаптировано под плавный геймплей на 60-120гц
+=================================================================
+*/
+
+const CONFIG = {
+    // --- Физика (Сделали "лунную", чтобы было проще) ---
+    playerEmoji: "🕺",
+    gravity: 0.15,            // Было 0.4 -> стало меньше (плавнее падение)
+    jumpForce: -6.5,          // Было -11 -> стало меньше (но из-за низкой гравитации прыгает норм)
+    jetpackForce: -15,        // Сила прыжка от Баса
+    moveSmoothing: 0.1,       // Инертность движения за пальцем (чем меньше, тем плавнее)
+    
+    // --- Платформы ---
+    platformWidth: 75,
+    platformHeight: 15,
+    
+    // Дистанция спауна. 
+    // ВАЖНО: MaxGap теперь рассчитывается автоматически в коде, 
+    // чтобы не превышать 90% высоты прыжка.
+    minGap: 60,               // Минимальное расстояние между платформами
+
+    movingSpeedStart: 1.0,    // Платформы ползают медленнее
+    
+    // --- Сложность ---
+    difficultyScale: 20000,   // Было 5000. Чем больше число, тем МЕДЛЕННЕЕ нарастает сложность.
+                              // Сейчас нужно набрать 20к очков, чтобы дойти до макс сложности.
+
+    // --- Бонусы (Шансы: 1 к X) ---
+    chanceButter: 25,
+    chanceClap: 15,
+    chanceSoundgoodizer: 35,
+    chanceBass: 50,
+    
+    // --- Мамаша ---
+    momAttackChance: 200,     // Чуть реже атакует (было 150)
+    momProjectileSpeed: 2.5,  // Летит чуть медленнее
+    momProjectileColor: "#7a5901",
+    momProjectileSize: 40,
+
+    // --- Тексты ---
+    texts: {
+        butter: "Мафло! (слоу-мо)",
+        clap: "Клӭп! (+3 дабл джампа)",
+        sound: "Саундгудізєр! (кайфуем)",
+        bass: "Гофрірованный BASS",
+        bassSub: "от Рокетмана",
+        deathFallTitle: "Влонекф упал и разбился к хуям собачьим",
+        deathFallSub: "Туда ему, лоху, и дорога. Бебебе.",
+        deathMomTitle: "Влонекф не вынес дипломатической мощи мамаши и сдох",
+        deathMomSub: "После этого он вознёсся в садовое товарищество",
+        deathMomEpic: ", , М о с с а д , ,"
+    }
+};
+
+/* 
+=================================================================
+   ЛОГИКА
+=================================================================
+*/
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const clapBtn = document.getElementById('clap-btn');
+const clapCountSpan = document.getElementById('clap-count');
+const menuScreen = document.getElementById('menu-screen');
+const gameOverDiv = document.getElementById('gameover-text');
+const redScreen = document.getElementById('red-screen');
+const momAlert = document.getElementById('mom-alert');
+
+function resize() {
+    canvas.width = window.innerWidth > 600 ? 450 : window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Переменные
+let gameRunning = false;
+let score = 0;
+let cameraY = 0;
+let difficulty = 0; // 0.0 - 1.0
+let frames = 0;
+let timeScale = 1.0; 
+
+// Расчетная высота прыжка для генератора
+let calculatedMaxJumpHeight = 0;
+
+// Игрок
+let player = { x: 0, y: 0, vy: 0, width: 40, height: 40, clapCharges: 0 };
+let inputX = 0;
+
+// Списки
+let platforms = [];
+let bonuses = [];
+let particles = [];
+let hazards = [];
+
+// Отслеживание высоты последнего спавна
+let highestPlatformY = 0;
+
+function initGame() {
+    // Расчет физики
+    // h = v^2 / (2g)
+    let h = (Math.abs(CONFIG.jumpForce) * Math.abs(CONFIG.jumpForce)) / (2 * CONFIG.gravity);
+    calculatedMaxJumpHeight = h;
+    console.log("Max Jump Height calculated: " + Math.floor(h) + "px");
+
+    player.x = canvas.width / 2 - 20;
+    player.y = canvas.height - 200;
+    player.vy = CONFIG.jumpForce;
+    player.clapCharges = 0;
+    inputX = canvas.width / 2;
+    
+    score = 0;
+    cameraY = 0;
+    timeScale = 1.0;
+    difficulty = 0;
+    
+    platforms = [];
+    bonuses = [];
+    particles = [];
+    hazards = [];
+    
+    // Стартовая платформа
+    let startP = {
+        x: canvas.width / 2 - CONFIG.platformWidth / 2,
+        y: canvas.height - 100,
+        type: 'normal',
+        vx: 0,
+        broken: false
+    };
+    platforms.push(startP);
+    highestPlatformY = startP.y;
+    
+    // Генерируем уровень вверх
+    while (highestPlatformY > -100) {
+        spawnNextPlatform();
+    }
+    
+    gameRunning = true;
+    updateUI();
+    requestAnimationFrame(gameLoop);
+}
+
+function spawnNextPlatform() {
+    // Обновляем сложность
+    difficulty = Math.min(score / CONFIG.difficultyScale, 1);
+
+    // Расчет дистанции (Y)
+    // Минимальный гэп + добавка от сложности
+    // Но строго ограничиваем 90% от высоты прыжка
+    let maxSafeGap = calculatedMaxJumpHeight * 0.9;
+    
+    // Плавное нарастание дистанции
+    // В начале (diff 0) дистанция minGap
+    // В конце (diff 1) дистанция maxSafeGap
+    let currentTargetGap = CONFIG.minGap + (maxSafeGap - CONFIG.minGap) * difficulty;
+    
+    // Немного рандома, чтобы не было скучно (+/- 10%)
+    let variance = (Math.random() * 20 - 10); 
+    let gap = currentTargetGap + variance;
+    
+    // Жесткий кап: ни при каких условиях не превышаем 90% высоты прыжка
+    if (gap > maxSafeGap) gap = maxSafeGap;
+    if (gap < CONFIG.minGap) gap = CONFIG.minGap;
+
+    let y = highestPlatformY - gap;
+    highestPlatformY = y;
+
+    // Тип платформы
+    // Белые (одноразовые): макс 30%
+    let chanceWhite = 0.05 + (0.25 * difficulty);
+    // Движущиеся: макс 30%
+    let chanceMoving = 0.05 + (0.25 * difficulty);
+    
+    let type = 'normal';
+    let rand = Math.random();
+
+    if (soundgoodizerActive) {
+        if (rand < 0.5) type = 'normal';
+        else type = 'moving';
+    } else {
+        if (rand < chanceWhite) type = 'white';
+        else if (rand < chanceWhite + chanceMoving) type = 'moving';
+    }
+
+    // Позиция X
+    let w = CONFIG.platformWidth;
+    let x = Math.random() * (canvas.width - w);
+    
+    let p = {
+        x: x,
+        y: y,
+        type: type,
+        vx: 0,
+        broken: false
+    };
+
+    if (type === 'moving') {
+        let speed = CONFIG.movingSpeedStart * (1 + difficulty); // Скорость растет всего в 2 раза к финалу
+        p.vx = Math.random() > 0.5 ? speed : -speed;
+    }
+
+    platforms.push(p);
+
+    // Бонус?
+    if (!p.broken && Math.random() < 0.3) {
+        spawnBonus(p);
+    }
+}
+
+function spawnBonus(platform) {
+    if (Math.random() < 1/CONFIG.chanceBass) {
+        bonuses.push({x: platform.x + 15, y: platform.y - 30, type: 'bass', platform: platform});
+        return;
+    }
+    if (Math.random() < 1/CONFIG.chanceSoundgoodizer) {
+        bonuses.push({x: platform.x + 15, y: platform.y - 30, type: 'sound', platform: platform});
+        return;
+    }
+    if (Math.random() < 1/CONFIG.chanceButter) {
+        bonuses.push({x: platform.x + 15, y: platform.y - 30, type: 'butter', platform: platform});
+        return;
+    }
+    if (Math.random() < 1/CONFIG.chanceClap) {
+        bonuses.push({x: platform.x + 15, y: platform.y - 30, type: 'clap', platform: platform});
+        return;
+    }
+}
+
+// Таймеры эффектов
+let soundgoodizerActive = false;
+let soundgoodizerTimer = 0;
+let butterTimer = 0;
+
+function gameLoop() {
+    if (!gameRunning) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Логика эффектов
+    if (butterTimer > 0) {
+        butterTimer--;
+        if (butterTimer <= 0) timeScale = 1.0;
+    }
+    if (soundgoodizerTimer > 0) {
+        soundgoodizerTimer--;
+        if (soundgoodizerTimer <= 0) soundgoodizerActive = false;
+    }
+
+    // Мамаша
+    frames++;
+    if (frames % 60 === 0 && Math.random() < 1/CONFIG.momAttackChance) {
+        triggerMomAttack();
+    }
+
+    // --- Игрок ---
+    let targetX = inputX - player.width / 2;
+    // Мягкое ограничение краев
+    if (targetX < -10) targetX = -10;
+    if (targetX > canvas.width - player.width + 10) targetX = canvas.width - player.width + 10;
+    
+    player.x += (targetX - player.x) * CONFIG.moveSmoothing;
+    
+    // Физика
+    player.vy += CONFIG.gravity * timeScale;
+    player.y += player.vy * timeScale;
+
+    // Скролл мира
+    let targetY = canvas.height * 0.45; // Чуть ниже середины держим
+    if (player.y < targetY) {
+        let diff = targetY - player.y;
+        player.y = targetY;
+        score += Math.floor(diff);
+        
+        platforms.forEach(p => p.y += diff);
+        bonuses.forEach(b => b.y += diff);
+        particles.forEach(p => p.y += diff);
+        hazards.forEach(h => h.y += diff);
+        
+        highestPlatformY += diff; // Сдвигаем точку спауна
+    }
+
+    // Платформы
+    for (let i = 0; i < platforms.length; i++) {
+        let p = platforms[i];
+        
+        if (p.type === 'moving') {
+            p.x += p.vx * timeScale;
+            if (p.x <= 0 || p.x + CONFIG.platformWidth >= canvas.width) p.vx *= -1;
+        }
+
+        // Рендер
+        if (!p.broken) {
+            ctx.fillStyle = getPlatformColor(p.type);
+            ctx.fillRect(p.x, p.y, CONFIG.platformWidth, CONFIG.platformHeight);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(p.x, p.y, CONFIG.platformWidth, CONFIG.platformHeight);
+        } else {
+             ctx.fillStyle = '#ddd';
+             ctx.fillRect(p.x, p.y + 10, CONFIG.platformWidth, CONFIG.platformHeight);
+        }
+
+        // Коллизия
+        if (player.vy > 0 && !p.broken &&
+            player.x + player.width > p.x + 5 && // Чуть уже хитбокс для честности
+            player.x < p.x + CONFIG.platformWidth - 5 &&
+            player.y + player.height > p.y &&
+            player.y + player.height < p.y + CONFIG.platformHeight + 15
+           ) {
+            player.vy = CONFIG.jumpForce;
+            if (p.type === 'white') p.broken = true;
+        }
+
+        // Ресайкл
+        if (p.y > canvas.height) {
+            platforms.splice(i, 1);
+            i--;
+        }
+    }
+    
+    // Доспаун
+    // Если верхняя платформа уехала ниже -100, создаем новую
+    if (highestPlatformY > -100) {
+        spawnNextPlatform();
+    }
+    
+    // Багфикс: если платформ совсем нет (упали все белые?)
+    if (platforms.length < 3) {
+        let y = highestPlatformY; 
+        if (platforms.length > 0) {
+            y = Math.min(...platforms.map(pl => pl.y));
+            highestPlatformY = y;
+        } 
+        spawnNextPlatform();
+    }
+
+    // Бонусы
+    for (let i = 0; i < bonuses.length; i++) {
+        let b = bonuses[i];
+        if (b.platform && b.platform.broken) b.y += 3 * timeScale;
+
+        ctx.font = "25px Arial";
+        let icon = b.type === 'butter' ? "🧈" : b.type === 'clap' ? "👏" : b.type === 'sound' ? "🎛️" : "🚀";
+        ctx.fillText(icon, b.x, b.y);
+
+        if (player.x < b.x + 30 && player.x + player.width > b.x &&
+            player.y < b.y + 30 && player.y + player.height > b.y) {
+            activateBonus(b.type);
+            bonuses.splice(i, 1);
+            i--;
+        }
+        if (b.y > canvas.height) { bonuses.splice(i, 1); i--; }
+    }
+
+    // Мамаша
+    for (let i = 0; i < hazards.length; i++) {
+        let h = hazards[i];
+        h.y += CONFIG.momProjectileSpeed * timeScale;
+        
+        ctx.fillStyle = CONFIG.momProjectileColor;
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, CONFIG.momProjectileSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#4d3800';
+        ctx.stroke();
+
+        let dx = player.x + player.width/2 - h.x;
+        let dy = player.y + player.height/2 - h.y;
+        if (Math.sqrt(dx*dx + dy*dy) < 30) gameOver('mom');
+
+        if (h.y > canvas.height) { hazards.splice(i, 1); i--; }
+    }
+
+    // Игрок
+    ctx.font = "40px Arial";
+    ctx.fillText(CONFIG.playerEmoji, player.x, player.y + 35);
+    if (player.vy < CONFIG.jumpForce * 1.5) ctx.fillText("🔥", player.x + 5, player.y + 55);
+
+    // Партиклы
+    for (let i = 0; i < particles.length; i++) {
+        let p = particles[i];
+        p.y -= 1 * timeScale;
+        p.life--;
+        ctx.globalAlpha = Math.max(0, p.life / 60);
+        ctx.fillStyle = "black";
+        ctx.font = "20px Impact";
+        ctx.fillText(p.text, p.x, p.y);
+        if (p.subText) {
+            ctx.font = "14px Impact";
+            ctx.fillText(p.subText, p.x, p.y + 15);
+        }
+        ctx.globalAlpha = 1.0;
+        if (p.life <= 0) { particles.splice(i, 1); i--; }
+    }
+
+    if (player.y > canvas.height) gameOver('fall');
+    
+    updateUI();
+    requestAnimationFrame(gameLoop);
+}
+
+function getPlatformColor(type) {
+    if (type === 'white') return 'white';
+    if (type === 'moving') return '#90EE90';
+    return '#32CD32';
+}
+
+function activateBonus(type) {
+    let text = "";
+    let sub = "";
+    if (type === 'butter') {
+        text = CONFIG.texts.butter;
+        timeScale = 0.5;
+        butterTimer = 600; 
+    } else if (type === 'clap') {
+        text = CONFIG.texts.clap;
+        player.clapCharges = 3;
+    } else if (type === 'sound') {
+        text = CONFIG.texts.sound;
+        soundgoodizerActive = true;
+        soundgoodizerTimer = 1800; 
+    } else if (type === 'bass') {
+        text = CONFIG.texts.bass;
+        sub = CONFIG.texts.bassSub;
+        player.vy = CONFIG.jetpackForce; 
+    }
+    particles.push({x: player.x - 20, y: player.y - 20, text: text, subText: sub, life: 120});
+}
+
+function triggerMomAttack() {
+    redScreen.style.display = 'block';
+    momAlert.style.display = 'block';
+    setTimeout(() => {
+        redScreen.style.display = 'none';
+        momAlert.style.display = 'none';
+        if (gameRunning) {
+            hazards.push({ x: Math.random() * (canvas.width - 40) + 20, y: -50 });
+        }
+    }, 1500);
+}
+
+// Управление
+window.addEventListener('mousemove', e => {
+    let rect = canvas.getBoundingClientRect();
+    inputX = e.clientX - rect.left;
+});
+window.addEventListener('touchmove', e => {
+    e.preventDefault();
+    let rect = canvas.getBoundingClientRect();
+    inputX = e.touches[0].clientX - rect.left;
+}, {passive: false});
+window.addEventListener('touchstart', e => {
+    let rect = canvas.getBoundingClientRect();
+    inputX = e.touches[0].clientX - rect.left;
+}, {passive: false});
+
+clapBtn.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+    if (gameRunning && player.clapCharges > 0) {
+        player.vy = CONFIG.jumpForce; 
+        player.clapCharges--;
+        updateUI();
+    }
+});
+clapBtn.addEventListener('click', () => {
+    if (gameRunning && player.clapCharges > 0) {
+        player.vy = CONFIG.jumpForce; 
+        player.clapCharges--;
+        updateUI();
+    }
+});
+
+function updateUI() {
+    scoreEl.innerText = score;
+    if (player.clapCharges > 0) {
+        clapBtn.style.display = 'block';
+        clapCountSpan.innerText = player.clapCharges;
+    } else {
+        clapBtn.style.display = 'none';
+    }
+}
+
+function gameOver(reason) {
+    gameRunning = false;
+    menuScreen.style.display = 'flex';
+    gameOverDiv.style.display = 'block';
+    let html = "";
+    if (reason === 'fall') {
+        html = `<h2>${CONFIG.texts.deathFallTitle}</h2><p>${CONFIG.texts.deathFallSub}</p>`;
+    } else if (reason === 'mom') {
+        html = `<h2>${CONFIG.texts.deathMomTitle}</h2><p>${CONFIG.texts.deathMomSub}</p><p class="serif-font" style="font-size: 28px; margin-top:20px;">${CONFIG.texts.deathMomEpic}</p>`;
+    }
+    gameOverDiv.innerHTML = html;
+}
+
+function startGame() {
+    menuScreen.style.display = 'none';
+    gameOverDiv.style.display = 'none';
+    initGame();
+}
+</script>
+</body>
+</html>
