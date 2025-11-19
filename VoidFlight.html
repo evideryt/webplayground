@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Геометрическая Истерика</title>
+    <title>Геометрическая Паника</title>
     <style>
         body {
             margin: 0;
@@ -16,16 +16,14 @@
         }
         canvas { display: block; }
         
-        /* Интерфейс */
+        /* UI */
         #ui-layer {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             padding: 15px;
             box-sizing: border-box;
+            z-index: 10;
         }
 
         .bar-container {
@@ -36,57 +34,36 @@
             height: 14px;
             position: relative;
         }
-        .bar-fill {
-            height: 100%;
-            width: 100%;
-            transition: width 0.1s linear;
-        }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.1s linear; }
         #hp-fill { background-color: #ff3333; }
         #fuel-fill { background-color: #ffff33; }
         
         .bar-label {
-            position: absolute;
-            top: -2px;
-            left: 4px;
-            font-size: 10px;
-            color: rgba(0,0,0,0.7);
-            font-weight: bold;
+            position: absolute; top: -2px; left: 4px; font-size: 10px;
+            color: rgba(0,0,0,0.7); font-weight: bold;
         }
 
         .coords {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #00ff00;
+            margin-top: 10px; font-size: 14px; color: #00ff00;
             text-shadow: 1px 1px 0 #000;
         }
 
-        /* Всплывающее сообщение о взрыве */
+        /* Сообщения */
         #alert-msg {
-            position: absolute;
-            top: 30%;
-            width: 100%;
-            text-align: center;
-            font-size: 18px;
-            color: #ff3333;
-            font-weight: bold;
-            display: none;
-            text-shadow: 0 0 5px black;
+            position: absolute; top: 20%; width: 100%; text-align: center;
+            font-size: 24px; color: #ff3333; font-weight: bold;
+            display: none; text-shadow: 0 0 10px black; z-index: 20;
         }
 
         #game-over {
-            display: none;
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9);
-            color: white;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            pointer-events: auto; 
-            z-index: 999;
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); color: white;
+            flex-direction: column; justify-content: center; align-items: center;
+            pointer-events: auto; z-index: 999;
         }
         button {
-            background: white; border: none; padding: 10px 20px; font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px;
+            background: white; border: none; padding: 15px 30px; font-size: 16px;
+            font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px;
         }
     </style>
 </head>
@@ -95,46 +72,75 @@
 <div id="ui-layer">
     <div class="bar-container">
         <div id="hp-fill" class="bar-fill"></div>
-        <span class="bar-label">ЦЕЛОСТНОСТЬ КОРЫТА</span>
+        <span class="bar-label">СТРУКТУРНАЯ ЦЕЛОСТНОСТЬ</span>
     </div>
     <div class="bar-container">
         <div id="fuel-fill" class="bar-fill"></div>
-        <span class="bar-label">ТОПЛИВО (СЛЁЗЫ РАЗРАБА)</span>
+        <span class="bar-label">ТОПЛИВО</span>
     </div>
-    <div class="coords" id="coords">X: 0 | Y: 0</div>
+    <div class="coords" id="coords">Инициализация...</div>
 </div>
 
-<div id="alert-msg">ВАЛИ ОТСЮДА!<br>ДО ВЗРЫВА: <span id="timer-val">5.00</span></div>
+<div id="alert-msg">БЕГИ, ГЛУПЕЦ!<br><span id="timer-val" style="font-size: 40px;">5.00</span></div>
 
 <div id="game-over">
-    <h1 id="death-reason">ТЫ ПОГИБ</h1>
-    <p>Треугольник схлопнулся в точку.</p>
-    <button onclick="location.reload()">РЕИНКАРНАЦИЯ</button>
+    <h1 id="death-reason" style="color: red; text-align: center; padding: 20px;">ТЫ ПОГИБ</h1>
+    <p>Геометрия оказалась сильнее.</p>
+    <button onclick="location.reload()">ПОПРОБОВАТЬ ЕЩЁ РАЗ</button>
 </div>
 
 <canvas id="gameCanvas"></canvas>
 
 <script>
-    // === КОНСТАНТЫ И НАСТРОЙКИ ===
+    // === КОНСТАНТЫ ===
     const SHIP_SIZE = 20;
-    const MAX_SPEED = 12; // Пикселей за тик (при 60 FPS)
+    const MAX_SPEED = 12; 
     const ACCELERATION = 0.6;
     const FRICTION = 0.96; 
-    const GRAVITY_FORCE = 0.35;
+    const GRAVITY_FORCE = 0.45; // Усилил
+    const GRAVITY_RADIUS_MULT = 2.5; // Гравитация действует на 2.5 радиуса планеты
     
-    // Топливо тратится на расстояние. 100 ед топлива = 150 000 пикселей пути.
-    // Значит 1 ед топлива = 1500 пикселей.
+    // Топливо
     const FUEL_CONSUMPTION = 1 / 1500; 
 
     // Пираты
-    const PIRATE_SPEED_RATIO = 0.9; // 90% от скорости игрока
+    const PIRATE_SPEED_RATIO = 0.95; 
     const PIRATE_DAMAGE = 20;
-    // Шанс спавна: 1/40 в секунду? Это очень редко (раз в 40 сек).
-    // Сделаем динамичнее: Проверка каждый кадр, но с очень низким шансом, 
-    // чтобы в среднем выходило раз в 5-10 секунд для начала, иначе задушат.
-    const PIRATE_SPAWN_RATE = 0.2; // Коэффициент частоты (чем выше, тем чаще)
+    const PIRATE_SPAWN_INTERVAL_MIN = 5000; // мс
+    const PIRATE_SPAWN_INTERVAL_MAX = 12000; // мс
 
-    // === СОСТОЯНИЕ ИГРЫ ===
+    // === СЛОВАРЬ ШУТОК ===
+    const JOKE_DICT = {
+        pirateSpawn: [
+            { main: "ВНИМАНИЕ! ПИРАТЫ!", sub: "Настырные ублюдки из налоговой" },
+            { main: "ВРАГ НА РАДАРЕ", sub: "Атака тупостью активирована" },
+            { main: "КТО-ТО ЛЕТИТ", sub: "Они хотят поговорить о спасении души" },
+            { main: "ТРЕВОГА!", sub: "Кажется, это коллекторы" }
+        ],
+        explosionRun: [
+            { main: "ПЛАНЕТА НЕСТАБИЛЬНА", sub: "Вали отсюда, сейчас рванёт!" },
+            { main: "КРИТИЧЕСКАЯ МАССА", sub: "Она сейчас сделает БУМ" }
+        ],
+        explosionHit: [
+            { main: "БОЛЬНО?!", sub: "Обожгло геометрические грани" },
+            { main: "ЗАЦЕПИЛО!", sub: "Надо было быстрее шевелить поршнями" },
+            { main: "КРИТИЧЕСКИЙ УРОН", sub: "Твой треугольник стал кругом от боли" }
+        ],
+        explosionMiss: [
+            { main: "ФУХ, ПРОНЕСЛО...", sub: "Ещё бы секунда и ты тост" },
+            { main: "ЧИСТО!", sub: "Мамкин гонщик, успел" }
+        ],
+        gravity: [
+            { main: "ГРАВИТАЦИЯ", sub: "Ньютон передает привет" },
+            { main: "ТЯЖЁЛЫЙ СЛУЧАЙ", sub: "Тебя засасывает в пучину бытия" }
+        ],
+        pirateCrash: [
+            { main: "МИНУС ОДИН", sub: "Лох - это судьба" },
+            { main: "КРАСИВО УШЁЛ", sub: "Он перепутал педали" }
+        ]
+    };
+
+    // === СОСТОЯНИЕ ===
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const uiHp = document.getElementById('hp-fill');
@@ -148,135 +154,100 @@
     let width, height;
     let lastTime = 0;
     let isGameOver = false;
+    let pirateTimer = 0;
+    let nextPirateTime = 5000;
 
-    // Камера
     let camX = 0, camY = 0;
 
-    // Игрок
-    const player = {
-        x: 0, y: 0,
-        vx: 0, vy: 0,
-        angle: 0,
-        hp: 100,
-        fuel: 100,
-        color: 'white'
-    };
+    const player = { x: 0, y: 0, vx: 0, vy: 0, angle: 0, hp: 100, fuel: 100, color: 'white' };
 
-    // Планета
     const planet = {
-        x: 0, y: 0,
-        radius: 0,
-        state: 'search', // search, active (found), countdown, dead
-        timer: 0,
-        targetX: 0, targetY: 0,
-        nextX: 0, nextY: 0 // Следующая цель
+        x: 0, y: 0, radius: 0, state: 'search', // search, active, countdown, exploding, dead
+        timer: 0, explosionProgress: 0,
+        targetX: 0, targetY: 0
     };
 
-    // Списки объектов
     const stars = [];
     const pirates = [];
     const floatingTexts = [];
     const particles = [];
-
-    // Джойстик
     const joystick = { active: false, originX: 0, originY: 0, currentX: 0, currentY: 0 };
-
-    // Абсурдные фразы
-    const absurdPhrases = [
-        "Загрузка депрессии...", "Оптимизация пустоты...", "Расчет траектории фиаско...",
-        "Сжигание налогов...", "Поиск смысла (404)...", "Гравитация - это миф...",
-        "Обнаружен космический пельмень...", "Координаты безысходности...",
-        "Подключение к астралу...", "Бюрократический маневр...",
-        "Лицензия пилота просрочена...", "Топливо пахнет клубникой...",
-        "Звезды смотрят осуждающе...", "Геометрия против тебя..."
-    ];
 
     // === ИНИЦИАЛИЗАЦИЯ ===
     function resize() {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
-        initStars();
-    }
-    window.addEventListener('resize', resize);
-    
-    function initStars() {
         stars.length = 0;
-        for(let i=0; i<150; i++) {
+        for(let i=0; i<100; i++) {
             stars.push({
                 x: (Math.random() - 0.5) * width * 3,
                 y: (Math.random() - 0.5) * height * 3,
-                size: Math.random() * 2.5,
+                size: Math.random() * 2,
                 speed: Math.random() * 0.4 + 0.1
             });
         }
     }
+    window.addEventListener('resize', resize);
 
     function spawnPlanet(firstTime = false) {
-        const dist = firstTime ? 1500 : (2500 + Math.random() * 3000);
+        const dist = firstTime ? 1500 : (3000 + Math.random() * 2000);
         const angle = Math.random() * Math.PI * 2;
-        
         planet.x = player.x + Math.cos(angle) * dist;
         planet.y = player.y + Math.sin(angle) * dist;
-        planet.radius = 350 + Math.random() * 400;
+        planet.radius = 300 + Math.random() * 300;
         planet.state = 'search';
+        planet.explosionProgress = 0;
         
-        // Генерируем точку G
-        const tDist = Math.random() * (planet.radius * 0.7);
+        const tDist = Math.random() * (planet.radius * 0.6);
         const tAngle = Math.random() * Math.PI * 2;
         planet.targetX = planet.x + Math.cos(tAngle) * tDist;
         planet.targetY = planet.y + Math.sin(tAngle) * tDist;
 
-        spawnFloatText("Обнаружена гравитационная аномалия");
+        if(!firstTime) spawnJoke('gravity');
     }
 
-    function spawnFloatText(text, x = width/2, y = height/2, isWorldCoord = false) {
+    function spawnJoke(type, x = width/2, y = height/3) {
+        const list = JOKE_DICT[type];
+        if (!list) return;
+        const joke = list[Math.floor(Math.random() * list.length)];
+        
         floatingTexts.push({
-            text: text,
-            x: x,
-            y: y,
-            life: 2.0, // секунды
-            isWorld: isWorldCoord, // если true, текст привязан к миру, иначе к экрану
-            color: `rgba(255, 255, 255, 1)`
+            main: joke.main,
+            sub: joke.sub,
+            x: x, y: y,
+            life: 3.0,
+            isWorld: false
         });
-    }
-    
-    function spawnPirate() {
-        // Спауним за пределами экрана
-        const angle = Math.random() * Math.PI * 2;
-        const dist = Math.max(width, height) * 0.8; // Чуть дальше края
-        pirates.push({
-            x: player.x + camX + Math.cos(angle) * dist, // Относительно игрока
-            y: player.y + camY + Math.sin(angle) * dist,
-            vx: 0, vy: 0,
-            angle: 0
-        });
-        spawnFloatText("Внимание! Пираты!", width/2, height/2 - 100);
     }
 
-    // Эффекты частиц
-    function createExplosion(x, y, color, count = 10) {
+    function spawnPirate() {
+        // Спавним чуть за пределами видимости
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.sqrt(width*width + height*height) * 0.6 + 100; 
+        
+        pirates.push({
+            x: player.x + camX + Math.cos(angle) * dist,
+            y: player.y + camY + Math.sin(angle) * dist,
+            vx: 0, vy: 0, angle: 0
+        });
+        spawnJoke('pirateSpawn');
+    }
+
+    function createExplosion(x, y, color, count = 10, speed = 10) {
         for(let i=0; i<count; i++) {
             particles.push({
                 x: x, y: y,
-                vx: (Math.random() - 0.5) * 10,
-                vy: (Math.random() - 0.5) * 10,
-                life: 1.0,
+                vx: (Math.random() - 0.5) * speed,
+                vy: (Math.random() - 0.5) * speed,
+                life: 1.0 + Math.random(),
                 color: color
             });
         }
     }
 
     // === УПРАВЛЕНИЕ ===
-    function startInput(x, y) {
-        if(isGameOver) return;
-        joystick.active = true;
-        joystick.originX = x; joystick.originY = y;
-        joystick.currentX = x; joystick.currentY = y;
-    }
-    function moveInput(x, y) {
-        if (!joystick.active) return;
-        joystick.currentX = x; joystick.currentY = y;
-    }
+    function startInput(x, y) { if(isGameOver) return; joystick.active = true; joystick.originX = x; joystick.originY = y; joystick.currentX = x; joystick.currentY = y; }
+    function moveInput(x, y) { if (!joystick.active) return; joystick.currentX = x; joystick.currentY = y; }
     function endInput() { joystick.active = false; }
 
     canvas.addEventListener('touchstart', e => startInput(e.touches[0].clientX, e.touches[0].clientY), {passive: false});
@@ -286,222 +257,191 @@
     canvas.addEventListener('mousemove', e => moveInput(e.clientX, e.clientY));
     canvas.addEventListener('mouseup', endInput);
 
-    // === ГЛАВНЫЙ ЦИКЛ ===
+    // === ЛОГИКА ===
     function loop(timestamp) {
         if (!lastTime) lastTime = timestamp;
-        // Вычисляем Delta Time в секундах
-        const dt = (timestamp - lastTime) / 1000;
+        const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
         lastTime = timestamp;
+        const timeScale = dt * 60; 
 
-        // Ограничиваем dt на случай лагов (чтобы физика не взрывалась)
-        const safeDt = Math.min(dt, 0.1); 
-        
-        // Коэффициент для приведения к скорости 60FPS
-        // Если у нас 60 FPS, timeScale = 1. Если 120 FPS, timeScale = 0.5
-        const timeScale = safeDt * 60; 
-
-        update(safeDt, timeScale);
+        update(dt, timeScale);
         draw();
         
-        if (!isGameOver) {
-            requestAnimationFrame(loop);
-        }
+        if (!isGameOver) requestAnimationFrame(loop);
     }
 
     function update(dt, timeScale) {
-        // 1. Абсурдные сообщения (рандомно)
-        if (Math.random() < 0.005 * timeScale) { // Редко
-            const phrase = absurdPhrases[Math.floor(Math.random() * absurdPhrases.length)];
-            // Рандомное место на экране
-            spawnFloatText(phrase, Math.random() * width, Math.random() * height * 0.8);
+        // Спавн пиратов по таймеру
+        pirateTimer += dt * 1000;
+        if (pirateTimer > nextPirateTime) {
+            spawnPirate();
+            pirateTimer = 0;
+            nextPirateTime = Math.random() * (PIRATE_SPAWN_INTERVAL_MAX - PIRATE_SPAWN_INTERVAL_MIN) + PIRATE_SPAWN_INTERVAL_MIN;
         }
 
-        // 2. Игрок Физика
+        // Игрок
         if (joystick.active && player.fuel > 0) {
             const dx = joystick.currentX - joystick.originX;
             const dy = joystick.currentY - joystick.originY;
             const dist = Math.sqrt(dx*dx + dy*dy);
             const maxDrag = 100;
-            
             if (dist > 0) {
                 const force = Math.min(dist, maxDrag) / maxDrag;
                 const angle = Math.atan2(dy, dx);
-                
                 player.vx += Math.cos(angle) * force * ACCELERATION * timeScale;
                 player.vy += Math.sin(angle) * force * ACCELERATION * timeScale;
                 player.angle = angle;
             }
         }
 
-        // Ограничение скорости
         const speed = Math.sqrt(player.vx*player.vx + player.vy*player.vy);
         if (speed > MAX_SPEED) {
-            player.vx = (player.vx / speed) * MAX_SPEED;
-            player.vy = (player.vy / speed) * MAX_SPEED;
+            player.vx = (player.vx/speed)*MAX_SPEED; player.vy = (player.vy/speed)*MAX_SPEED;
         }
-
-        // Трение
-        player.vx *= Math.pow(FRICTION, timeScale); // Корректное трение для разного FPS
+        player.vx *= Math.pow(FRICTION, timeScale);
         player.vy *= Math.pow(FRICTION, timeScale);
         
-        // Движение
         const moveX = player.vx * timeScale;
         const moveY = player.vy * timeScale;
-        player.x += moveX;
-        player.y += moveY;
+        player.x += moveX; player.y += moveY;
 
-        // Расход топлива (пропорционально пройденному пути)
         const distMoved = Math.sqrt(moveX*moveX + moveY*moveY);
-        if (distMoved > 0.1) {
-            player.fuel -= distMoved * FUEL_CONSUMPTION;
-            if (player.fuel < 0) player.fuel = 0;
-        }
+        if (distMoved > 0.1) player.fuel = Math.max(0, player.fuel - distMoved * FUEL_CONSUMPTION);
 
-        // 3. Взаимодействие с Планетой
+        // Планета и Гравитация
         const dxP = planet.x - player.x;
         const dyP = planet.y - player.y;
-        const distToPlanet = Math.sqrt(dxP*dxP + dyP*dyP);
-        let insidePlanet = distToPlanet < planet.radius;
+        const distToCenter = Math.sqrt(dxP*dxP + dyP*dyP);
+        const gravRadius = planet.radius * GRAVITY_RADIUS_MULT;
+        
+        let insidePlanet = distToCenter < planet.radius;
 
-        // Гравитация (только если планета не мертва)
-        if (planet.state !== 'dead' && distToPlanet < planet.radius + 800) {
-            const gStrength = (1 - Math.min(distToPlanet / (planet.radius + 800), 1)) * GRAVITY_FORCE * timeScale;
-            player.vx += (dxP / distToPlanet) * gStrength;
-            player.vy += (dyP / distToPlanet) * gStrength;
+        // Гравитация (если не мертва)
+        if (planet.state !== 'dead' && distToCenter < gravRadius) {
+            const gStrength = (1 - Math.min(distToCenter / gravRadius, 1)) * GRAVITY_FORCE * timeScale;
+            player.vx += (dxP / distToCenter) * gStrength;
+            player.vy += (dyP / distToCenter) * gStrength;
         }
 
-        // Цвет игрока
-        player.color = insidePlanet ? 'black' : 'white';
+        player.color = (insidePlanet && planet.state !== 'exploding') ? 'black' : 'white';
 
-        // Логика Планеты
-        if (insidePlanet && planet.state !== 'dead') {
-            // Заправка (медленная)
-            if (player.fuel < 100) {
-                player.fuel += 10 * dt; // 10 единиц в секунду
-                if (player.fuel > 100) player.fuel = 100;
-            }
+        // Логика планеты
+        if (insidePlanet && planet.state !== 'dead' && planet.state !== 'exploding') {
+            if (player.fuel < 100) player.fuel = Math.min(100, player.fuel + 15 * dt);
 
-            // Поиск цели
             if (planet.state === 'search') {
                 const dxT = planet.targetX - player.x;
                 const dyT = planet.targetY - player.y;
                 if (Math.sqrt(dxT*dxT + dyT*dyT) < SHIP_SIZE + 30) {
-                    // НАШЁЛ!
                     planet.state = 'countdown';
                     planet.timer = 5.00;
-                    spawnFloatText("ПРОЦЕСС САМОУНИЧТОЖЕНИЯ ЗАПУЩЕН", width/2, height/2 - 50);
+                    spawnJoke('explosionRun');
                     alertMsg.style.display = 'block';
                 }
             }
         }
 
-        // Таймер взрыва
         if (planet.state === 'countdown') {
             planet.timer -= dt;
             timerVal.innerText = Math.max(0, planet.timer).toFixed(2);
-            
             if (planet.timer <= 0) {
-                planet.state = 'dead';
+                planet.state = 'exploding';
+                planet.explosionProgress = 0;
                 alertMsg.style.display = 'none';
-                createExplosion(planet.x, planet.y, '#aaaaaa', 50);
-                
-                // Урон если внутри
-                if (insidePlanet) {
-                    player.hp -= 30; // БУМ
-                    spawnFloatText("-30 HP! ТЫ НЕ УСПЕЛ!", width/2, height/2, false);
-                    createExplosion(player.x, player.y, 'red', 20);
-                } else {
-                    spawnFloatText("Фух, пронесло...", width/2, height/2, false);
-                }
-                
-                // Генерируем следующую
-                setTimeout(() => spawnPlanet(), 2000);
             }
         }
 
-        // 4. Пираты
-        // Спавн (шанс каждый кадр, зависящий от dt)
-        // Допустим, хотим в среднем 1 пирата каждые 10 секунд.
-        // Шанс p = dt / 10.
-        if (Math.random() < (dt / 8)) { 
-            spawnPirate();
+        if (planet.state === 'exploding') {
+            planet.explosionProgress += dt * 2; // Скорость взрыва (0.5 сек)
+            
+            // УРОН НАНОСИТСЯ В МОМЕНТ НАЧАЛА ВЗРЫВА (1 тик)
+            if (planet.explosionProgress <= dt * 3) { // Чуть-чуть даем лаг
+                const damageRadius = planet.radius * 2.5; // Взрывная волна больше планеты
+                if (distToCenter < damageRadius) {
+                    // Чем ближе, тем больнее. В центре - смерть.
+                    const damageFactor = 1 - (distToCenter / damageRadius);
+                    const damage = Math.floor(damageFactor * 150); // До 150 урона
+                    player.hp -= damage;
+                    spawnJoke('explosionHit');
+                    createExplosion(player.x, player.y, 'red', 30, 15);
+                    
+                    // Отталкивание
+                    const push = damageFactor * 30;
+                    player.vx -= (dxP / distToCenter) * push;
+                    player.vy -= (dyP / distToCenter) * push;
+                } else {
+                    if (distToCenter < damageRadius * 1.5) spawnJoke('explosionMiss');
+                }
+            }
+
+            if (planet.explosionProgress >= 1) {
+                planet.state = 'dead';
+                setTimeout(() => spawnPlanet(), 1500);
+            }
         }
 
+        // Пираты
         for (let i = pirates.length - 1; i >= 0; i--) {
             const p = pirates[i];
-            
-            // Логика движения (самонаводка)
             const dx = player.x - p.x;
             const dy = player.y - p.y;
             const angle = Math.atan2(dy, dx);
             
-            // Скорость пирата чуть меньше макс скорости игрока
-            const pSpeed = MAX_SPEED * PIRATE_SPEED_RATIO; 
-            
+            const pSpeed = MAX_SPEED * PIRATE_SPEED_RATIO;
             p.vx = Math.cos(angle) * pSpeed * timeScale;
             p.vy = Math.sin(angle) * pSpeed * timeScale;
-            
-            p.x += p.vx;
-            p.y += p.vy;
-            p.angle = angle;
+            p.x += p.vx; p.y += p.vy; p.angle = angle;
 
-            // Коллизия с Игроком
-            const dPlayer = Math.sqrt(dx*dx + dy*dy);
-            if (dPlayer < SHIP_SIZE + 10) {
-                player.hp -= 20;
-                spawnFloatText("АЙ! ПИРАТ! -20 HP", width/2, height/2 - 50, false);
-                createExplosion(p.x, p.y, 'red', 15);
-                pirates.splice(i, 1); // Удаляем камикадзе
+            // Удар по игроку
+            if (Math.sqrt(dx*dx + dy*dy) < SHIP_SIZE + 15) {
+                player.hp -= PIRATE_DAMAGE;
+                createExplosion(p.x, p.y, 'red', 20, 10);
+                pirates.splice(i, 1);
+                spawnJoke('explosionHit'); // Используем общую фразу про боль
                 continue;
             }
 
-            // Коллизия с Планетой (Пират убивается об планету)
-            const dPlanet = Math.sqrt((planet.x - p.x)**2 + (planet.y - p.y)**2);
-            if (dPlanet < planet.radius) {
-                createExplosion(p.x, p.y, 'orange', 10);
-                spawnFloatText("Лох - это судьба", p.x - camX + width/2, p.y - camY + height/2, false);
+            // Удар об планету (только если она не мертва)
+            const distToP = Math.sqrt((planet.x - p.x)**2 + (planet.y - p.y)**2);
+            if (distToP < planet.radius && planet.state !== 'dead' && planet.state !== 'exploding') {
+                createExplosion(p.x, p.y, 'orange', 20, 10);
+                spawnJoke('pirateCrash', p.x - camX + width/2, p.y - camY + height/2);
                 pirates.splice(i, 1);
                 continue;
             }
-
-            // Удаляем если улетел супер далеко (оптимизация)
-            if (dPlayer > 5000) pirates.splice(i, 1);
+            
+            // Взрыв планеты убивает пиратов
+            if (planet.state === 'exploding' && distToP < planet.radius * 2.5) {
+                 createExplosion(p.x, p.y, 'orange', 20, 20);
+                 pirates.splice(i, 1);
+            }
         }
 
-        // 5. Частицы
+        // Частицы и текст
         for (let i = particles.length - 1; i >= 0; i--) {
             const part = particles[i];
-            part.x += part.vx * timeScale;
-            part.y += part.vy * timeScale;
-            part.life -= dt;
-            if(part.life <= 0) particles.splice(i, 1);
+            part.x += part.vx * timeScale; part.y += part.vy * timeScale;
+            part.life -= dt; if(part.life <= 0) particles.splice(i, 1);
         }
-
-        // 6. Текст
         for (let i = floatingTexts.length - 1; i >= 0; i--) {
             const t = floatingTexts[i];
-            t.y -= 1 * timeScale; // Плывет вверх
-            t.life -= dt;
-            if(t.life <= 0) floatingTexts.splice(i, 1);
+            t.y -= 30 * dt; t.life -= dt; if(t.life <= 0) floatingTexts.splice(i, 1);
         }
 
-        // Проверка смерти
-        if (player.hp <= 0) gameOver("КОРАБЛЬ РАЗВАЛИЛСЯ");
-        if (player.fuel <= 0 && Math.abs(player.vx) < 0.1 && Math.abs(player.vy) < 0.1) gameOver("БЕНЗИН КОНЧИЛСЯ, ТЫ ЗАСТРЯЛ");
+        if (player.hp <= 0) gameOver("КОРПУС РАЗРУШЕН");
+        if (player.fuel <= 0 && Math.abs(player.vx) < 0.1) gameOver("ТОПЛИВО ИСЧЕРПАНО");
 
-        // Обновление UI
         uiHp.style.width = Math.max(0, player.hp) + "%";
         uiFuel.style.width = Math.max(0, player.fuel) + "%";
         
         if (planet.state !== 'dead') {
             const dX = Math.round(planet.x - player.x);
             const dY = Math.round(planet.y - player.y);
-            uiCoords.innerText = `ЦЕЛЬ -> X: ${dX} | Y: ${-dY}`;
+            uiCoords.innerText = `ЦЕЛЬ [${dX}, ${-dY}]`;
         } else {
-            uiCoords.innerText = "СКАНИРОВАНИЕ...";
+            uiCoords.innerText = "ПОИСК СИГНАЛА...";
         }
 
-        // Камера
         camX = player.x - width / 2;
         camY = player.y - height / 2;
     }
@@ -510,14 +450,13 @@
         ctx.fillStyle = '#050505';
         ctx.fillRect(0, 0, width, height);
 
-        // Звёзды
+        // Звезды
         ctx.save();
         stars.forEach(star => {
             let sx = (star.x - camX * star.speed) % width;
             let sy = (star.y - camY * star.speed) % height;
-            if (sx < 0) sx += width;
-            if (sy < 0) sy += height;
-            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
+            if (sx < 0) sx += width; if (sy < 0) sy += height;
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random()*0.5+0.3})`;
             ctx.beginPath(); ctx.arc(sx, sy, star.size, 0, Math.PI*2); ctx.fill();
         });
         ctx.restore();
@@ -527,88 +466,141 @@
         ctx.translate(-camX, -camY);
 
         // Планета
-        if (planet.state === 'dead') {
-            ctx.fillStyle = '#333'; ctx.strokeStyle = '#444';
-        } else if (planet.state === 'countdown') {
-            ctx.fillStyle = `hsl(${Date.now()/5 % 360}, 60%, 80%)`; // Панический цвет
-            ctx.strokeStyle = 'red';
-        } else {
-            ctx.fillStyle = '#eee'; ctx.strokeStyle = '#fff';
-        }
-        ctx.beginPath(); ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI*2);
-        ctx.fill(); ctx.lineWidth = 5; ctx.stroke();
-
-        // Цель внутри планеты
-        if (planet.state === 'search') {
-            const pulse = 15 + Math.sin(Date.now() / 100) * 5;
-            ctx.fillStyle = 'rgba(255, 50, 50, 0.7)';
-            ctx.beginPath(); ctx.arc(planet.targetX, planet.targetY, pulse, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = 'red';
-            ctx.beginPath(); ctx.arc(planet.targetX, planet.targetY, 5, 0, Math.PI*2); ctx.fill();
+        if (planet.state === 'exploding') {
+            const scale = 1 + planet.explosionProgress; // 1x -> 2x
+            const alpha = 1 - planet.explosionProgress;
+            ctx.fillStyle = `rgba(255, ${50 * alpha}, ${50 * alpha}, ${alpha})`; // Белый -> Красный
+            ctx.beginPath(); ctx.arc(planet.x, planet.y, planet.radius * scale, 0, Math.PI*2); ctx.fill();
+        } else if (planet.state !== 'dead') {
+            // Цвет планеты
+            if (planet.state === 'countdown') {
+                const flash = Math.sin(Date.now() / 50) > 0;
+                ctx.fillStyle = flash ? '#ffcccc' : '#ff6666';
+                ctx.strokeStyle = 'red';
+            } else {
+                ctx.fillStyle = '#eee'; 
+                ctx.strokeStyle = '#fff';
+            }
+            
+            ctx.beginPath(); ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI*2);
+            ctx.fill(); ctx.lineWidth = 5; ctx.stroke();
+            
+            // Точка G
+            if (planet.state === 'search') {
+                const pulse = 15 + Math.sin(Date.now() / 100) * 5;
+                ctx.fillStyle = 'rgba(255, 50, 50, 0.7)';
+                ctx.beginPath(); ctx.arc(planet.targetX, planet.targetY, pulse, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'red';
+                ctx.beginPath(); ctx.arc(planet.targetX, planet.targetY, 5, 0, Math.PI*2); ctx.fill();
+            }
         }
 
         // Пираты
         pirates.forEach(p => {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(p.angle);
-            // Пульсация пирата
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
             const scale = 1 + Math.sin(Date.now() / 50) * 0.2;
             ctx.scale(scale, scale);
-            ctx.fillStyle = 'red';
-            ctx.beginPath();
-            ctx.moveTo(10, 0); ctx.lineTo(-5, 5); ctx.lineTo(-5, -5);
-            ctx.fill();
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-6, 6); ctx.lineTo(-6, -6); ctx.fill();
             ctx.restore();
         });
 
-        // Частицы
         particles.forEach(p => {
-            ctx.fillStyle = p.color;
-            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
             ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
             ctx.globalAlpha = 1;
         });
 
         // Игрок
-        ctx.translate(player.x, player.y);
-        ctx.rotate(player.angle);
+        ctx.translate(player.x, player.y); ctx.rotate(player.angle);
         ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.moveTo(SHIP_SIZE, 0); ctx.lineTo(-SHIP_SIZE/2, SHIP_SIZE/2); ctx.lineTo(-SHIP_SIZE/2, -SHIP_SIZE/2);
-        ctx.fill();
+        ctx.beginPath(); ctx.moveTo(SHIP_SIZE, 0); ctx.lineTo(-SHIP_SIZE/2, SHIP_SIZE/2); ctx.lineTo(-SHIP_SIZE/2, -SHIP_SIZE/2); ctx.fill();
+        ctx.restore();
 
-        // Мировой текст (привязан к координатам)
-        ctx.restore(); // Сброс трансформации для UI текстов
+        // === UI ПОВЕРХ МИРА ===
         
-        // Отрисовка текстов
+        // Индикаторы пиратов
+        drawIndicators();
+
+        // Тексты шуток
         floatingTexts.forEach(t => {
-            ctx.fillStyle = t.color;
+            ctx.save();
+            ctx.fillStyle = 'white';
+            ctx.shadowColor = 'black'; ctx.shadowBlur = 4;
             ctx.globalAlpha = Math.min(t.life, 1);
-            ctx.font = "bold 16px Courier New";
             ctx.textAlign = "center";
             
-            let dx = t.x;
-            let dy = t.y;
-            
-            if (t.isWorld) {
-                dx = t.x - camX;
-                dy = t.y - camY;
-            }
-            
-            ctx.fillText(t.text, dx, dy);
-            ctx.globalAlpha = 1;
+            let dx = t.x, dy = t.y;
+            if (t.isWorld) { dx -= camX; dy -= camY; }
+
+            ctx.font = "bold 20px Courier New";
+            ctx.fillText(t.main, dx, dy);
+            ctx.font = "14px Courier New";
+            ctx.fillStyle = "#cccccc";
+            ctx.fillText(t.sub, dx, dy + 20);
+            ctx.restore();
         });
 
-        // Джойстик
         if (joystick.active) {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.arc(joystick.originX, joystick.originY, 50, 0, Math.PI*2); ctx.stroke();
             ctx.beginPath(); ctx.arc(joystick.currentX, joystick.currentY, 20, 0, Math.PI*2);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.fill();
-            ctx.beginPath(); ctx.moveTo(joystick.originX, joystick.originY); ctx.lineTo(joystick.currentX, joystick.currentY); ctx.stroke();
         }
+    }
+
+    // Сложная математика для индикатора на краях экрана
+    function drawIndicators() {
+        const margin = 30;
+        const w = width; 
+        const h = height;
+        const cx = width / 2;
+        const cy = height / 2;
+
+        pirates.forEach(p => {
+            const px = p.x - camX;
+            const py = p.y - camY;
+
+            // Если пират на экране, индикатор не нужен
+            if (px > 0 && px < w && py > 0 && py < h) return;
+
+            const dx = px - cx;
+            const dy = py - cy;
+            
+            // Находим пересечение луча из центра с границами экрана
+            let ix, iy;
+            
+            // Склоны
+            const slope = dy / dx;
+            
+            if (dx > 0) { // Справа
+                ix = w - margin;
+                iy = cy + (w/2 - margin) * slope;
+            } else { // Слева
+                ix = margin;
+                iy = cy - (w/2 - margin) * slope;
+            }
+
+            // Если вылезли за верх/низ, пересчитываем по Y
+            if (iy < margin) { 
+                iy = margin;
+                ix = cx - (h/2 - margin) / slope;
+            } else if (iy > h - margin) {
+                iy = h - margin;
+                ix = cx + (h/2 - margin) / slope;
+            }
+
+            // Рисуем
+            ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + Math.sin(Date.now()/100)*0.5})`; // Мигание
+            ctx.beginPath();
+            ctx.arc(ix, iy, 15, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = "bold 20px Courier New";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("!", ix, iy);
+        });
     }
 
     function gameOver(reason) {
@@ -617,7 +609,6 @@
         gameOverScreen.style.display = 'flex';
     }
 
-    // Старт
     resize();
     spawnPlanet(true);
     requestAnimationFrame(loop);
