@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Геометрическая Тоска</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505; /* Почти черный, как моя душа */
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; /* Чтобы ты не скроллил страницу, а страдал в игре */
+        }
+        canvas {
+            display: block;
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px black;
+        }
+        .debug-text {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        .target-info {
+            font-size: 16px;
+            font-weight: bold;
+            color: #00ff00; /* Матрица, детка */
+        }
+    </style>
+</head>
+<body>
+
+<div id="hud">
+    <div class="target-info">ЦЕЛЬ: <span id="coords">Ищу смысл жизни...</span></div>
+    <div class="debug-text" id="status">Системы в норме (вроде бы)</div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    // === НАСТРОЙКИ (КРУТИ РУЧКИ ЗДЕСЬ) ===
+    const SHIP_SIZE = 20;
+    const MAX_SPEED = 12;
+    const ACCELERATION = 0.5;
+    const FRICTION = 0.96; // Трение в вакууме? Да, потому что я так сказал.
+    const GRAVITY_FORCE = 0.3; // Насколько сильно планета хочет тебя обнять
+    const STAR_COUNT = 100;
+    
+    // === ИНИЦИАЛИЗАЦИЯ ===
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const coordsDiv = document.getElementById('coords');
+    const statusDiv = document.getElementById('status');
+
+    let width, height;
+    
+    // Камера (сдвиг мира относительно игрока)
+    let camX = 0, camY = 0;
+
+    // Игрок (Наш героический треугольник)
+    const player = {
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        angle: 0,
+        color: 'white'
+    };
+
+    // Текущая цель (Планета)
+    let currentPlanet = {
+        x: 0,
+        y: 0,
+        radius: 0,
+        visited: false,
+        targetX: 0, // Координаты красной точки внутри планеты
+        targetY: 0
+    };
+
+    // Джойстик
+    const joystick = {
+        active: false,
+        originX: 0,
+        originY: 0,
+        currentX: 0,
+        currentY: 0
+    };
+
+    // Звёзды (для красоты и параллакса)
+    const stars = [];
+
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        // Генерим звёзды один раз при ресайзе, чтобы не лагало
+        stars.length = 0;
+        for(let i=0; i<STAR_COUNT; i++) {
+            stars.push({
+                x: (Math.random() - 0.5) * width * 3, // Раскидаем пошире
+                y: (Math.random() - 0.5) * height * 3,
+                size: Math.random() * 2,
+                speed: Math.random() * 0.5 + 0.1 // Параллакс коэффициент
+            });
+        }
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Генератор новой планеты (в жопе мира)
+    function spawnNewPlanet() {
+        const dist = 2000 + Math.random() * 3000; // Далеко, чтобы ты пострадал
+        const angle = Math.random() * Math.PI * 2;
+        
+        currentPlanet.x = player.x + Math.cos(angle) * dist;
+        currentPlanet.y = player.y + Math.sin(angle) * dist;
+        currentPlanet.radius = 400 + Math.random() * 400; // Огромная дура
+        currentPlanet.visited = false;
+        
+        // Точка G... кхм, точка назначения внутри планеты
+        // Генерируем её где-то внутри планеты, но не у самого края
+        const targetDist = Math.random() * (currentPlanet.radius * 0.8);
+        const targetAngle = Math.random() * Math.PI * 2;
+        currentPlanet.targetX = currentPlanet.x + Math.cos(targetAngle) * targetDist;
+        currentPlanet.targetY = currentPlanet.y + Math.sin(targetAngle) * targetDist;
+
+        statusDiv.innerText = "Обнаружен новый гравитационный колодец. Удачи.";
+    }
+
+    spawnNewPlanet(); // Первая доза бесплатно
+
+    // === УПРАВЛЕНИЕ (ДЖОЙСТИК) ===
+    function handleInputStart(x, y) {
+        joystick.active = true;
+        joystick.originX = x;
+        joystick.originY = y;
+        joystick.currentX = x;
+        joystick.currentY = y;
+    }
+
+    function handleInputMove(x, y) {
+        if (!joystick.active) return;
+        joystick.currentX = x;
+        joystick.currentY = y;
+    }
+
+    function handleInputEnd() {
+        joystick.active = false;
+    }
+
+    // Тач события
+    canvas.addEventListener('touchstart', e => handleInputStart(e.touches[0].clientX, e.touches[0].clientY));
+    canvas.addEventListener('touchmove', e => handleInputMove(e.touches[0].clientX, e.touches[0].clientY));
+    canvas.addEventListener('touchend', handleInputEnd);
+
+    // Мышь (для тестов на компе, ты же ленивый)
+    canvas.addEventListener('mousedown', e => handleInputStart(e.clientX, e.clientY));
+    canvas.addEventListener('mousemove', e => handleInputMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', handleInputEnd);
+
+
+    // === ГЛАВНЫЙ ЦИКЛ ===
+    function loop() {
+        // 1. Физика и логика
+        
+        // Обработка джойстика
+        if (joystick.active) {
+            const dx = joystick.currentX - joystick.originX;
+            const dy = joystick.currentY - joystick.originY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const maxDrag = 100; // Максимальная длина джойстика
+            
+            if (dist > 0) {
+                const force = Math.min(dist, maxDrag) / maxDrag; // 0 to 1
+                const angle = Math.atan2(dy, dx);
+                
+                player.vx += Math.cos(angle) * force * ACCELERATION;
+                player.vy += Math.sin(angle) * force * ACCELERATION;
+                player.angle = angle; // Поворачиваем нос корабля
+            }
+        }
+
+        // Ограничение скорости
+        const speed = Math.sqrt(player.vx*player.vx + player.vy*player.vy);
+        if (speed > MAX_SPEED) {
+            player.vx = (player.vx / speed) * MAX_SPEED;
+            player.vy = (player.vy / speed) * MAX_SPEED;
+        }
+
+        // Трение и движение
+        player.vx *= FRICTION;
+        player.vy *= FRICTION;
+        player.x += player.vx;
+        player.y += player.vy;
+
+        // Гравитация планеты
+        const dxP = currentPlanet.x - player.x;
+        const dyP = currentPlanet.y - player.y;
+        const distToPlanetCenter = Math.sqrt(dxP*dxP + dyP*dyP);
+
+        let insidePlanet = false;
+
+        // Если мы внутри радиуса планеты (или близко)
+        if (distToPlanetCenter < currentPlanet.radius + 500) { // Гравитация действует чуть дальше визуального края
+            const gravityStrength = (1 - Math.min(distToPlanetCenter / (currentPlanet.radius + 500), 1)) * GRAVITY_FORCE;
+            player.vx += (dxP / distToPlanetCenter) * gravityStrength;
+            player.vy += (dyP / distToPlanetCenter) * gravityStrength;
+        }
+
+        // Проверка: мы внутри визуального круга?
+        if (distToPlanetCenter < currentPlanet.radius) {
+            insidePlanet = true;
+            player.color = 'black'; // Контраст, стиль, мода
+        } else {
+            player.color = 'white';
+        }
+
+        // Проверка цели (Красная точка)
+        if (insidePlanet && !currentPlanet.visited) {
+            const dxT = currentPlanet.targetX - player.x;
+            const dyT = currentPlanet.targetY - player.y;
+            const distToTarget = Math.sqrt(dxT*dxT + dyT*dyT);
+
+            // Если коснулись точки
+            if (distToTarget < SHIP_SIZE + 20) {
+                currentPlanet.visited = true;
+                statusDiv.innerText = "Цель захвачена. Планета обесцвечена. Следующая!";
+                setTimeout(spawnNewPlanet, 1000); // Даем секунду насладиться триумфом
+            }
+        }
+
+        // Обновление HUD
+        if (!currentPlanet.visited) {
+            const dX = Math.round(currentPlanet.x - player.x);
+            const dY = Math.round(currentPlanet.y - player.y);
+            // Инвертируем Y, потому что в программировании Y растет вниз, а люди привыкли наоборот
+            coordsDiv.innerText = `X: ${dX} | Y: ${-dY}`;
+        } else {
+            coordsDiv.innerText = "Сканирование пространства...";
+        }
+
+        // Камера следит за игроком
+        camX = player.x - width / 2;
+        camY = player.y - height / 2;
+
+
+        // 2. Отрисовка
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.save();
+        
+        // Рисуем звёзды (с параллаксом)
+        stars.forEach(star => {
+            // Вычисляем положение звезды относительно камеры с учетом коэффициента скорости
+            let sx = (star.x - camX * star.speed) % width;
+            let sy = (star.y - camY * star.speed) % height;
+            
+            // Зацикливаем звезды, чтобы они не кончались
+            if (sx < 0) sx += width;
+            if (sy < 0) sy += height;
+
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, star.size, 0, Math.PI*2);
+            ctx.fill();
+        });
+
+        // Переходим в мировую систему координат для объектов
+        ctx.translate(-camX, -camY);
+
+        // Рисуем планету
+        if (currentPlanet.visited) {
+            ctx.fillStyle = '#444'; // Серая унылость
+            ctx.strokeStyle = '#666';
+        } else {
+            ctx.fillStyle = '#eeeeee'; // Светлое будущее
+            ctx.strokeStyle = '#fff';
+        }
+        
+        ctx.beginPath();
+        ctx.arc(currentPlanet.x, currentPlanet.y, currentPlanet.radius, 0, Math.PI*2);
+        ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.stroke();
+
+        // Рисуем Цель внутри планеты (если планета еще жива)
+        if (!currentPlanet.visited) {
+            // Пульсация
+            const pulse = 20 + Math.sin(Date.now() / 100) * 5;
+            ctx.fillStyle = `rgba(255, 50, 50, 0.8)`;
+            ctx.beginPath();
+            ctx.arc(currentPlanet.targetX, currentPlanet.targetY, pulse, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Маленькая метка поверх, чтобы видеть точнее
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(currentPlanet.targetX, currentPlanet.targetY, 5, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // Рисуем Игрока (Треугольник)
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.angle);
+        
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.moveTo(SHIP_SIZE, 0); // Нос
+        ctx.lineTo(-SHIP_SIZE/2, SHIP_SIZE/2); // Левый зад
+        ctx.lineTo(-SHIP_SIZE/2, -SHIP_SIZE/2); // Правый зад
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore(); // Возвращаемся к экранным координатам
+
+        // Рисуем джойстик (визуализация)
+        if (joystick.active) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            
+            // База
+            ctx.beginPath();
+            ctx.arc(joystick.originX, joystick.originY, 50, 0, Math.PI*2);
+            ctx.stroke();
+
+            // Пипка
+            ctx.beginPath();
+            ctx.arc(joystick.currentX, joystick.currentY, 20, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fill();
+            
+            // Линия
+            ctx.beginPath();
+            ctx.moveTo(joystick.originX, joystick.originY);
+            ctx.lineTo(joystick.currentX, joystick.currentY);
+            ctx.stroke();
+        }
+
+        requestAnimationFrame(loop);
+    }
+
+    loop();
+
+</script>
+</body>
+</html>
