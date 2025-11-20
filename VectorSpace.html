@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GEOMETRY: SYNTHWAVE EDITION</title>
+    <style>
+        body {
+            margin: 0; overflow: hidden; background-color: #050505;
+            color: white; font-family: 'Courier New', Courier, monospace;
+            touch-action: none; user-select: none;
+        }
+        canvas { display: block; }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; padding: 15px; box-sizing: border-box; z-index: 10;
+        }
+
+        .bar-container {
+            margin-bottom: 8px; width: 200px; background: rgba(255,255,255,0.1);
+            border: 1px solid #444; height: 14px; position: relative;
+        }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.2s ease-out; }
+        #hp-fill { background-color: #ff3333; }
+        #fuel-fill { background-color: #ffff33; }
+        
+        .counter { margin-top: 5px; font-size: 16px; color: white; font-weight: bold; }
+        .mission { margin-top: 5px; font-size: 16px; color: #00ffff; font-weight: bold; display: none; }
+        
+        /* Угол для хардкора */
+        #hidden-angle {
+            position: absolute; bottom: 20px; right: 20px;
+            font-size: 40px; font-weight: 900;
+            color: #090909; /* Почти невидимый */
+            display: none; pointer-events: none;
+        }
+
+        #alert-msg {
+            position: absolute; top: 20%; width: 100%; text-align: center;
+            font-size: 24px; color: #ff3333; font-weight: bold;
+            display: none; text-shadow: 0 0 10px black; z-index: 20;
+        }
+        
+        #cutscene-overlay {
+            position: absolute; top: 30%; width: 100%; text-align: center;
+            font-size: 20px; color: cyan; font-weight: bold;
+            display: none; text-shadow: 0 0 5px blue; z-index: 30;
+            background: rgba(0,0,0,0.8); padding: 20px 0;
+        }
+
+        #fuel-alert {
+            position: absolute; top: 40%; width: 100%; text-align: center;
+            font-size: 18px; color: yellow; font-weight: bold;
+            display: none; text-shadow: 0 0 5px black;
+        }
+
+        #game-over, #win-screen {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); color: white;
+            flex-direction: column; justify-content: center; align-items: center;
+            pointer-events: auto; z-index: 999;
+        }
+        button {
+            background: white; border: none; padding: 15px 30px; font-size: 16px;
+            font-family: inherit; font-weight: bold; cursor: pointer; margin-top: 20px;
+        }
+        .key-hint {
+            position: absolute; bottom: 10px; left: 10px; font-size: 12px; color: #555;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui-layer">
+    <div class="bar-container">
+        <div id="hp-fill" class="bar-fill"></div>
+        <span class="bar-label">HP</span>
+    </div>
+    <div class="bar-container">
+        <div id="fuel-fill" class="bar-fill"></div>
+        <span class="bar-label">FUEL</span>
+    </div>
+    <div class="counter" id="planet-counter">ПЛАНЕТ: 0</div>
+    <div class="mission" id="mission-counter">ЦЕЛЬ: ЗАЧИСТКА (0/50)</div>
+    <div class="coords" id="coords" style="margin-top:10px; font-size:14px; color:#00ff00;">...</div>
+    <div class="key-hint">WASD / TOUCH</div>
+</div>
+
+<div id="hidden-angle">0°</div>
+<div id="alert-msg">ЗАХВАТ!<br><span id="timer-val" style="font-size: 40px;">5.00</span></div>
+<div id="cutscene-overlay"></div>
+<div id="fuel-alert">ТОПЛИВО ИСЧЕРПАНО</div>
+
+<div id="game-over">
+    <h1 id="death-reason" style="color: red;">СИГНАЛ ПОТЕРЯН</h1>
+    <button onclick="location.reload()">RESTART</button>
+</div>
+
+<div id="win-screen">
+    <h1 style="color: gold;">СЕКТОР ЗАЧИЩЕН</h1>
+    <p>Мир восстановлен. Топливо бесконечно.</p>
+    <button onclick="location.reload()">НОВАЯ ИГРА</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    // === КОНФИГ ===
+    let currentMaxSpeed = 12; 
+    let currentShipSize = 20;
+    let damageReduction = 1.0; 
+    let fuelEfficiency = 1.0;
+    let missileCooldownTime = 15; // База 15с
+
+    const ACCELERATION = 0.6;
+    const FRICTION = 0.98; 
+    const GRAVITY_FORCE = 0.45;
+    // Топливо тратится ещё медленнее (1.5 раза от прошлого)
+    const FUEL_CONSUMPTION = 1 / 1000; 
+    const BASE_FUEL_REWARD = 25;
+
+    // Уровни
+    const LVL_FIRST_PIRATE = 3;
+    const LVL_RADAR = 7;
+    const LVL_JOHNSON_1 = 12;
+    const LVL_AGGRO = 17;
+    const LVL_MISSILE = 20;
+    const LVL_JOHNSON_2 = 25;
+    const LVL_ENDGAME = 30;
+    const ENDGAME_KILLS = 50;
+
+    // === СЮЖЕТНЫЕ ФРАЗЫ (Скрипт) ===
+    const SCRIPTED_TEXTS = {
+        1: "Начало пути.",
+        2: "Вторая точка. Всё спокойно.",
+        3: "Космос кажется пустым...", // Тут спавнится первый пират
+        4: "Гравитация - лишь теория.",
+        8: "Ты втягиваешься.",
+        16: "Половина пути к безумию.",
+        32: "Легенда геометрии."
+    };
+
+    const EVENT_TEXTS = {
+        firstPirate: ["ВНИМАНИЕ! ВРАГ!", "Похоже, мы тут не одни."],
+        johnson1: ["Полковник, на радар!", "Это же... Гигантский Апгрейд."],
+        missile: ["РАКЕТНЫЙ МОДУЛЬ", "Они заплатят за всё."],
+        johnson2: ["МАКСИМАЛЬНАЯ МОЩЬ", "Размер имеет значение."],
+        radar: ["Система навигации обновлена."],
+        fuelLow: ["В баке пары...", "Ищем колонку."],
+        aggroStart: ["Они стали агрессивнее.", "Держись."],
+        endgame: ["СУДНЫЙ ДЕНЬ НАСТАЛ."]
+    };
+
+    // === INIT ===
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI Links
+    const uiHp = document.getElementById('hp-fill');
+    const uiFuel = document.getElementById('fuel-fill');
+    const uiCounter = document.getElementById('planet-counter');
+    const uiMission = document.getElementById('mission-counter');
+    const uiAngle = document.getElementById('hidden-angle');
+    const uiCoords = document.getElementById('coords');
+    const alertMsg = document.getElementById('alert-msg');
+    const cutsceneOverlay = document.getElementById('cutscene-overlay');
+    const fuelAlert = document.getElementById('fuel-alert');
+    const timerVal = document.getElementById('timer-val');
+    
+    let width, height, lastTime = 0, isGameOver = false;
+    let camX = 0, camY = 0;
+
+    const stats = { planetsFound: 0, killsAfter30: 0 }; 
+    
+    const player = { 
+        x: 0, y: 0, vx: 0, vy: 0, angle: 0, 
+        hp: 100, fuel: 100, color: 'white', driftMode: false,
+        hasMissile: false, missileCooldownTimer: 0, // Таймер перезарядки
+        godMode: false, hasLaser: false
+    };
+
+    const planet = { x: 0, y: 0, radius: 0, state: 'search', timer: 0, explosionProgress: 0, targetX: 0, targetY: 0 };
+    
+    const upgrades = [];
+    const stars = [], pirates = [], floatingTexts = [], particles = [], missiles = [], laserBeams = [];
+    
+    // Input
+    const joystick = { active: false, originX: 0, originY: 0, currentX: 0, currentY: 0 };
+    const keys = { w: false, a: false, s: false, d: false };
+
+    let hasSpawnedFirstPirate = false;
+    let cutsceneActive = false;
+
+    // === HELPER FUNCTIONS ===
+    function spawnFloatText(text, x, y, color='white') {
+        if (x === undefined) { x = width/2; y = height/3; }
+        floatingTexts.push({ text, x, y, life: 3.0, color, isWorld: false });
+    }
+    
+    // Линейная интерполяция угла
+    function lerpAngle(a, b, t) {
+        let diff = b - a;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        return a + diff * t;
+    }
+
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        stars.length = 0;
+        for(let i=0; i<100; i++) stars.push({
+            x: (Math.random()-0.5)*width*3, y: (Math.random()-0.5)*height*3,
+            size: Math.random()*2, speed: Math.random()*0.4+0.1
+        });
+    }
+    window.addEventListener('resize', resize);
+
+    // === SPAWN LOGIC ===
+    function spawnPlanet(firstTime = false) {
+        const level = stats.planetsFound;
+        
+        if (level === LVL_ENDGAME && !player.godMode) {
+            startEndgameSequence(); return; 
+        }
+
+        const dist = (firstTime ? 1500 : 2500) * (1 + level * 0.1) + Math.random() * 1000;
+        const angle = Math.random() * Math.PI * 2;
+        
+        planet.x = player.x + Math.cos(angle) * dist;
+        planet.y = player.y + Math.sin(angle) * dist;
+        
+        // Уменьшил максимальный размер (было до x4, стало x2)
+        const sizeMultiplier = Math.min(2, 1 + level * 0.1);
+        planet.radius = (300 + Math.random() * 150) * sizeMultiplier; // Макс 450*2 = 900
+        planet.state = 'search'; planet.explosionProgress = 0;
+        
+        const tDist = Math.random() * (planet.radius * 0.6);
+        const tAngle = Math.random() * Math.PI * 2;
+        planet.targetX = planet.x + Math.cos(tAngle) * tDist;
+        planet.targetY = planet.y + Math.sin(tAngle) * tDist;
+
+        // Scripted Text check
+        if (SCRIPTED_TEXTS[level]) spawnFloatText(SCRIPTED_TEXTS[level]);
+        if (level === LVL_AGGRO) spawnFloatText(EVENT_TEXTS.aggroStart[0], width/2, height/2, 'red');
+
+        // Upgrades
+        if (level === LVL_RADAR) spawnFloatText(EVENT_TEXTS.radar[0]);
+        
+        if (level === LVL_JOHNSON_1) {
+            spawnUpgrade('pp1', angle + Math.PI, 3000);
+            spawnFloatText(EVENT_TEXTS.johnson1[0]);
+            setTimeout(()=>spawnFloatText(EVENT_TEXTS.johnson1[1], width/2, height/2+30), 1500);
+        }
+        if (level === LVL_MISSILE) spawnUpgrade('missile', angle + Math.PI/2, 3000);
+        if (level === LVL_JOHNSON_2) {
+            spawnUpgrade('pp2', angle - Math.PI/2, 3500);
+            uiAngle.style.display = 'block';
+        }
+    }
+
+    function spawnUpgrade(type, angle, dist) {
+        upgrades.push({
+            type: type,
+            x: player.x + Math.cos(angle) * dist,
+            y: player.y + Math.sin(angle) * dist,
+            collected: false
+        });
+    }
+
+    // === GAME LOOP ===
+    function loop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+        lastTime = timestamp;
+        const timeScale = dt * 60; 
+        update(dt, timeScale);
+        draw();
+        if (!isGameOver) requestAnimationFrame(loop);
+    }
+
+    function update(dt, timeScale) {
+        // 1. SPAWN PIRATES
+        if (stats.planetsFound === LVL_FIRST_PIRATE && !hasSpawnedFirstPirate) {
+            spawnPirate(true); // Force close
+            hasSpawnedFirstPirate = true;
+            spawnFloatText(EVENT_TEXTS.firstPirate[0], width/2, height/2, 'red');
+        }
+        
+        // Regular Spawn logic
+        if (stats.planetsFound >= LVL_FIRST_PIRATE || player.godMode) {
+            let spawnChance = 0.05; // Base chance
+            if (player.godMode) spawnChance = 0.4; // ENDGAME MAYHEM
+            else if (stats.planetsFound >= LVL_AGGRO) spawnChance = 0.15;
+            
+            // Если есть ракета, спавним чаще, так как они ближе
+            if (player.hasMissile) spawnChance += 0.05;
+
+            if (Math.random() < spawnChance * dt) {
+                const dP = Math.sqrt((planet.x - player.x)**2 + (planet.y - player.y)**2);
+                // Не спавним если игрок внутри планеты (кроме финала)
+                if (player.godMode || dP > planet.radius + 1000) {
+                    spawnPirate(player.hasMissile || player.godMode); // Closer if missile/god
+                }
+            }
+        }
+
+        // 2. WEAPONS
+        // Missile Logic (Instant Reaction)
+        if (player.hasMissile) {
+            if (player.missileCooldownTimer > 0) {
+                player.missileCooldownTimer -= dt;
+            } else {
+                // Ready to fire. Check for targets on screen.
+                checkAndFireMissile();
+            }
+        }
+
+        // Laser (Auto)
+        if (player.hasLaser) fireLaser();
+
+        // 3. PLAYER PHYSICS & INPUT
+        handleInput(dt, timeScale);
+
+        // Planet Interaction
+        const dxP = planet.x - player.x;
+        const dyP = planet.y - player.y;
+        const distToCenter = Math.sqrt(dxP*dxP + dyP*dyP);
+        const insidePlanet = distToCenter < planet.radius;
+
+        // Gravity
+        if (planet.state !== 'dead' && distToCenter < planet.radius * 2.5) {
+            const gStrength = (1 - Math.min(distToCenter / (planet.radius * 2.5), 1)) * GRAVITY_FORCE * timeScale;
+            player.vx += (dxP / distToCenter) * gStrength;
+            player.vy += (dyP / distToCenter) * gStrength;
+        }
+        player.color = (insidePlanet && planet.state !== 'exploding') ? 'black' : 'white';
+
+        // Inside Planet Logic
+        if (insidePlanet && planet.state === 'search' && !cutsceneActive) {
+            const dxT = planet.targetX - player.x;
+            const dyT = planet.targetY - player.y;
+            
+            // Hardcore Angle UI
+            if (stats.planetsFound >= LVL_JOHNSON_2) {
+                let angleDeg = Math.atan2(dyT, dxT) * 180 / Math.PI;
+                if (angleDeg < 0) angleDeg += 360;
+                uiAngle.innerText = Math.round(angleDeg) + "°";
+            }
+
+            if (Math.sqrt(dxT*dxT + dyT*dyT) < currentShipSize + 40) {
+                planet.state = 'countdown'; planet.timer = 5.00;
+                if (!player.godMode) {
+                    player.fuel = Math.min(100, player.fuel + BASE_FUEL_REWARD * fuelEfficiency);
+                    if (player.fuel > 0) { player.driftMode = false; fuelAlert.style.display = 'none'; }
+                }
+                stats.planetsFound++;
+                uiCounter.innerText = "ПЛАНЕТ: " + stats.planetsFound;
+                // Scripted text check inside spawnPlanet() handles next msg
+                alertMsg.style.display = 'block';
+            }
+        }
+
+        // Planet Explosion
+        if (planet.state === 'countdown') {
+            planet.timer -= dt; timerVal.innerText = Math.max(0, planet.timer).toFixed(2);
+            if (planet.timer <= 0) { planet.state = 'exploding'; planet.explosionProgress = 0; alertMsg.style.display = 'none'; }
+        }
+        if (planet.state === 'exploding') {
+            planet.explosionProgress += dt * 2;
+            // Damage frame
+            if (planet.explosionProgress <= dt * 4 && distToCenter < planet.radius * 2.5) {
+                const dmg = Math.floor((1 - distToCenter / (planet.radius * 2.5)) * 150 / damageReduction);
+                player.hp -= dmg;
+                const push = (1 - distToCenter / (planet.radius * 2.5)) * 40;
+                player.vx -= (dxP / distToCenter) * push; player.vy -= (dyP / distToCenter) * push;
+                createParticles(player.x, player.y, 'red', 20);
+                spawnFloatText("УДАРНАЯ ВОЛНА!");
+            }
+            if (planet.explosionProgress >= 1) { planet.state = 'dead'; setTimeout(() => spawnPlanet(), 1000); }
+        }
+
+        // Upgrades Collection
+        upgrades.forEach(u => {
+            if (u.collected) return;
+            const d = Math.sqrt((u.x - player.x)**2 + (u.y - player.y)**2);
+            if (d < currentShipSize + 50) {
+                u.collected = true;
+                if (u.type === 'pp1') {
+                    currentShipSize *= 1.5; currentMaxSpeed *= 1.5; damageReduction = 1.5; fuelEfficiency = 1.4;
+                }
+                if (u.type === 'missile') {
+                    player.hasMissile = true;
+                    spawnFloatText(EVENT_TEXTS.missile[0], width/2, height/2, 'red');
+                }
+                if (u.type === 'pp2') {
+                    currentShipSize *= 1.3; currentMaxSpeed *= 1.3; fuelEfficiency = 1.5; missileCooldownTime = 5; // Faster Reload
+                    spawnFloatText(EVENT_TEXTS.johnson2[0], width/2, height/2, 'cyan');
+                }
+            }
+        });
+
+        updateEntities(dt, timeScale);
+
+        if (player.hp <= 0) {
+            isGameOver = true;
+            document.getElementById('game-over').style.display = 'flex';
+        }
+        if (player.godMode && stats.killsAfter30 >= ENDGAME_KILLS) {
+            isGameOver = true;
+            document.getElementById('win-screen').style.display = 'flex';
+        }
+
+        // UI Updates
+        uiHp.style.width = Math.max(0, player.hp) + "%";
+        uiFuel.style.width = Math.max(0, player.fuel) + "%";
+        if (planet.state !== 'dead') uiCoords.innerText = `ЦЕЛЬ [${Math.round(planet.x - player.x)}, ${Math.round(-(planet.y - player.y))}]`;
+        else uiCoords.innerText = "ПОИСК...";
+
+        camX = player.x - width / 2; camY = player.y - height / 2;
+    }
+
+    function handleInput(dt, timeScale) {
+        if (cutsceneActive) {
+            player.vx *= 0.9; player.vy *= 0.9; return;
+        }
+
+        let inputX = 0, inputY = 0;
+        let hasInput = false;
+
+        // Keyboard
+        if (keys.w) inputY -= 1;
+        if (keys.s) inputY += 1;
+        if (keys.a) inputX -= 1;
+        if (keys.d) inputX += 1;
+
+        // Joystick Override
+        if (joystick.active) {
+            const dx = joystick.currentX - joystick.originX;
+            const dy = joystick.currentY - joystick.originY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 10) { // Deadzone
+                inputX = dx; inputY = dy;
+                hasInput = true;
+            }
+        } else if (inputX !== 0 || inputY !== 0) {
+            hasInput = true;
+        }
+
+        if (hasInput && (player.fuel > 0 || player.godMode) && !player.driftMode) {
+            // Normalize
+            const len = Math.sqrt(inputX*inputX + inputY*inputY);
+            const dirX = inputX / len;
+            const dirY = inputY / len;
+            
+            // Apply Force
+            player.vx += dirX * ACCELERATION * timeScale;
+            player.vy += dirY * ACCELERATION * timeScale;
+            
+            // Smooth Rotation
+            const targetAngle = Math.atan2(dirY, dirX);
+            player.angle = lerpAngle(player.angle, targetAngle, 0.15 * timeScale);
+            
+            // Fuel
+            if (!player.godMode) {
+                const distMoved = Math.sqrt((player.vx*timeScale)**2 + (player.vy*timeScale)**2);
+                if (distMoved > 0.1) player.fuel = Math.max(0, player.fuel - distMoved * FUEL_CONSUMPTION);
+            }
+        } else if (player.fuel <= 0 && !player.godMode) {
+            player.driftMode = true; fuelAlert.style.display = 'block';
+        }
+
+        // Cap Speed
+        const speed = Math.sqrt(player.vx*player.vx + player.vy*player.vy);
+        if (speed > currentMaxSpeed) {
+            player.vx = (player.vx/speed)*currentMaxSpeed; 
+            player.vy = (player.vy/speed)*currentMaxSpeed;
+        }
+        player.vx *= Math.pow(FRICTION, timeScale); 
+        player.vy *= Math.pow(FRICTION, timeScale);
+
+        player.x += player.vx * timeScale; 
+        player.y += player.vy * timeScale;
+    }
+
+    // === WEAPONS LOGIC ===
+    function checkAndFireMissile() {
+        // Ищем врага на экране
+        let target = null;
+        let minD = Infinity;
+        // Экранный радиус
+        const screenRadius = Math.max(width, height) * 0.6;
+
+        pirates.forEach(p => {
+            const dist = Math.sqrt((p.x - player.x)**2 + (p.y - player.y)**2);
+            if (dist < screenRadius && dist < minD) {
+                minD = dist; target = p;
+            }
+        });
+
+        if (target) {
+            // FIRE
+            missiles.push({ x: player.x, y: player.y, target: target, life: 8.0, angle: player.angle });
+            createParticles(player.x, player.y, 'cyan', 10);
+            // Reset Timer
+            player.missileCooldownTimer = missileCooldownTime;
+        }
+    }
+
+    function fireLaser() {
+        let target = null;
+        let minD = 700; // Range
+        
+        pirates.forEach(p => {
+            const dx = p.x - player.x; const dy = p.y - player.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            // Cone check
+            const angleTo = Math.atan2(dy, dx);
+            let angleDiff = angleTo - player.angle;
+            while(angleDiff > Math.PI) angleDiff -= Math.PI*2;
+            while(angleDiff < -Math.PI) angleDiff += Math.PI*2;
+            
+            if (Math.abs(angleDiff) < 0.4 && dist < minD) {
+                target = p; minD = dist;
+            }
+        });
+        
+        if (target) {
+            // Visual Beam
+            laserBeams.push({ sx: player.x, sy: player.y, ex: target.x, ey: target.y, life: 0.2 });
+            // Kill
+            const idx = pirates.indexOf(target);
+            if (idx > -1) {
+                pirates.splice(idx, 1);
+                createParticles(target.x, target.y, 'orange', 30);
+                if (player.godMode) {
+                    stats.killsAfter30++;
+                    uiMission.innerText = `ЦЕЛЬ: ЗАЧИСТКА (${stats.killsAfter30}/${ENDGAME_KILLS})`;
+                }
+            }
+        }
+    }
+
+    function spawnPirate(forceClose = false) {
+        const angle = Math.random() * Math.PI * 2;
+        // Если есть ракета или годмод, спавним прямо у края экрана
+        const spawnMargin = 50;
+        let dist = Math.sqrt(width*width + height*height) / 2 + spawnMargin; 
+        
+        if (!forceClose) {
+             // Если обычный режим, чуть дальше
+             dist += 200;
+        }
+
+        let speedRatio = 0.7;
+        if (stats.planetsFound >= LVL_AGGRO) speedRatio = 0.95;
+        if (player.godMode) speedRatio = 1.1; // Super fast in endgame
+
+        pirates.push({
+            x: player.x + camX + Math.cos(angle) * dist,
+            y: player.y + camY + Math.sin(angle) * dist,
+            vx: 0, vy: 0, angle: 0, speedRatio
+        });
+    }
+
+    function updateEntities(dt, timeScale) {
+        // Missiles
+        for (let i = missiles.length - 1; i >= 0; i--) {
+            const m = missiles[i];
+            if (!pirates.includes(m.target)) m.life = 0; // Target lost/dead
+            
+            if (m.life > 0) {
+                const dx = m.target.x - m.x; const dy = m.target.y - m.y;
+                const targetAngle = Math.atan2(dy, dx);
+                // Homing
+                m.angle = lerpAngle(m.angle, targetAngle, 0.2 * timeScale);
+                const speed = currentMaxSpeed * 1.2; 
+                m.x += Math.cos(m.angle) * speed * timeScale;
+                m.y += Math.sin(m.angle) * speed * timeScale;
+                
+                // Hit
+                const d = Math.sqrt((m.target.x - m.x)**2 + (m.target.y - m.y)**2);
+                if (d < 30) {
+                    createParticles(m.target.x, m.target.y, 'red', 30);
+                    const idx = pirates.indexOf(m.target);
+                    if (idx > -1) {
+                        pirates.splice(idx, 1);
+                        if (player.godMode) { stats.killsAfter30++; uiMission.innerText = `ЦЕЛЬ: ЗАЧИСТКА (${stats.killsAfter30}/${ENDGAME_KILLS})`; }
+                    }
+                    m.life = 0;
+                }
+                m.life -= dt;
+            } else { missiles.splice(i, 1); }
+        }
+
+        // Pirates
+        for (let i = pirates.length - 1; i >= 0; i--) {
+            const p = pirates[i];
+            const dx = player.x - p.x; const dy = player.y - p.y;
+            const angle = Math.atan2(dy, dx);
+            const pSpeed = currentMaxSpeed * p.speedRatio; 
+            p.vx = Math.cos(angle) * pSpeed * timeScale; p.vy = Math.sin(angle) * pSpeed * timeScale;
+            
+            if (!cutsceneActive) { p.x += p.vx; p.y += p.vy; }
+            p.angle = angle;
+
+            if (!player.godMode && Math.sqrt(dx*dx + dy*dy) < currentShipSize + 15) {
+                player.hp -= (20 / damageReduction);
+                createParticles(p.x, p.y, 'red', 15);
+                pirates.splice(i, 1); continue;
+            }
+            const distToP = Math.sqrt((planet.x - p.x)**2 + (planet.y - p.y)**2);
+            if (distToP < planet.radius && planet.state !== 'dead' && planet.state !== 'exploding') {
+                createParticles(p.x, p.y, 'orange', 15); pirates.splice(i, 1); continue;
+            }
+            if (planet.state === 'exploding' && distToP < planet.radius * 2.5) {
+                 createParticles(p.x, p.y, 'orange', 20); pirates.splice(i, 1);
+            }
+        }
+
+        // Particles & Text & Beams
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].x += particles[i].vx * timeScale; particles[i].y += particles[i].vy * timeScale;
+            particles[i].life -= dt; if(particles[i].life <= 0) particles.splice(i, 1);
+        }
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+            floatingTexts[i].y -= 30 * dt; floatingTexts[i].life -= dt; if(floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+        }
+        for (let i = laserBeams.length - 1; i >= 0; i--) {
+            laserBeams[i].life -= dt; if(laserBeams[i].life <= 0) laserBeams.splice(i, 1);
+        }
+    }
+
+    function createParticles(x, y, color, count) {
+        for(let i=0; i<count; i++) particles.push({ x, y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1.0, color });
+    }
+
+    function startEndgameSequence() {
+        cutsceneActive = true; cutsceneOverlay.style.display = 'block';
+        const phrases = ["ВЫ ОКРУЖЕНЫ.", "ВЫ ОБВИНЯЕТЕСЬ В МАРОДЁРСТВЕ.", "СДЕЛКА:", "ЗАЧИСТИТЕ СЕКТОР ОТ ПИРАТОВ", "И МЫ ДАДИМ ТОПЛИВО."];
+        let i = 0; cutsceneOverlay.innerText = phrases[0]; spawnFloatText(EVENT_TEXTS.endgame[0], width/2, height/2, 'red');
+        const interval = setInterval(() => {
+            i++; if (i < phrases.length) cutsceneOverlay.innerText = phrases[i];
+            else {
+                clearInterval(interval); cutsceneActive = false; cutsceneOverlay.style.display = 'none';
+                player.godMode = true; player.hasLaser = true; player.fuel = 100; player.driftMode = false;
+                fuelAlert.style.display = 'none'; uiMission.style.display = 'block';
+                spawnPlanet();
+            }
+        }, 2000);
+    }
+
+    function draw() {
+        ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, width, height);
+
+        ctx.save();
+        stars.forEach(star => {
+            let sx = (star.x - camX * star.speed) % width; let sy = (star.y - camY * star.speed) % height;
+            if (sx < 0) sx += width; if (sy < 0) sy += height;
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random()*0.5+0.3})`;
+            ctx.beginPath(); ctx.arc(sx, sy, star.size, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.restore();
+
+        ctx.save(); ctx.translate(-camX, -camY);
+
+        // Upgrades
+        upgrades.forEach(u => {
+            if (u.collected) return;
+            ctx.save(); ctx.translate(u.x, u.y);
+            ctx.font = "bold 40px Courier New"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            if (u.type === 'pp1') { ctx.fillStyle = '#00ff00'; ctx.fillText("<==3", 0, 0); }
+            if (u.type === 'missile') { ctx.fillStyle = '#ff0000'; ctx.fillText("↑", 0, 0); }
+            if (u.type === 'pp2') { ctx.fillStyle = 'cyan'; ctx.fillText("<===3", 0, 0); }
+            ctx.restore();
+        });
+
+        // Planet
+        if (planet.state === 'exploding') {
+            const scale = 1 + planet.explosionProgress; const alpha = 1 - planet.explosionProgress;
+            ctx.fillStyle = `rgba(255, ${50 * alpha}, ${50 * alpha}, ${alpha})`;
+            ctx.beginPath(); ctx.arc(planet.x, planet.y, planet.radius * scale, 0, Math.PI*2); ctx.fill();
+        } else if (planet.state !== 'dead') {
+            if (planet.state === 'countdown') {
+                ctx.fillStyle = (Math.sin(Date.now()/50)>0) ? '#ffcccc' : '#ff6666'; ctx.strokeStyle = 'red';
+            } else { ctx.fillStyle = '#eee'; ctx.strokeStyle = '#fff'; }
+            ctx.beginPath(); ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI*2);
+            ctx.fill(); ctx.lineWidth = 5; ctx.stroke();
+            
+            if (planet.state === 'search' && !cutsceneActive) {
+                // ЗЕЛЕНАЯ ТОЧКА
+                ctx.fillStyle = '#00ff00'; ctx.beginPath(); ctx.arc(planet.targetX, planet.targetY, 20, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#ccffcc'; ctx.beginPath(); ctx.arc(planet.targetX, planet.targetY, 5, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        // Beams
+        laserBeams.forEach(b => {
+            ctx.strokeStyle = `rgba(0, 255, 255, ${b.life * 5})`; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(b.sx, b.sy); ctx.lineTo(b.ex, b.ey); ctx.stroke();
+        });
+
+        // Missiles
+        missiles.forEach(m => {
+            ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(m.angle + Math.PI/2);
+            ctx.fillStyle = 'cyan'; ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(5, 5); ctx.lineTo(-5, 5); ctx.fill();
+            ctx.restore();
+        });
+
+        // Pirates
+        pirates.forEach(p => {
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+            const scale = 1 + Math.sin(Date.now() / 50) * 0.2; ctx.scale(scale, scale);
+            ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-6, 6); ctx.lineTo(-6, -6); ctx.fill();
+            ctx.restore();
+        });
+
+        particles.forEach(p => {
+            ctx.fillStyle = p.color; ctx.globalAlpha = p.life; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
+        });
+
+        // Player
+        ctx.translate(player.x, player.y); ctx.rotate(player.angle);
+        ctx.fillStyle = player.color;
+        ctx.beginPath(); ctx.moveTo(currentShipSize, 0); ctx.lineTo(-currentShipSize/2, currentShipSize/2); ctx.lineTo(-currentShipSize/2, -currentShipSize/2); ctx.fill();
+        
+        // Radars
+        if (!cutsceneActive && !player.godMode) {
+            if (stats.planetsFound >= LVL_RADAR && planet.state === 'search' && player.color !== 'black') {
+                drawRadarTo(planet.x, planet.y, 'white', 0);
+            }
+            upgrades.forEach(u => {
+                 if (!u.collected) {
+                     let col = (u.type==='pp1')?'#00ff00':(u.type==='missile')?'#ff0000':'cyan';
+                     drawRadarTo(u.x, u.y, col, 1);
+                 }
+            });
+        }
+
+        ctx.restore();
+
+        drawIndicators(); 
+        floatingTexts.forEach(t => {
+            ctx.save(); ctx.fillStyle = t.color || 'white'; ctx.shadowColor = 'black'; ctx.shadowBlur = 4;
+            ctx.globalAlpha = Math.min(t.life, 1); ctx.textAlign = "center"; ctx.font = "bold 20px Courier New";
+            let dx = t.x, dy = t.y; if (t.isWorld) { dx -= camX; dy -= camY; }
+            ctx.fillText(t.text, dx, dy); ctx.restore();
+        });
+
+        if (joystick.active) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(joystick.originX, joystick.originY, 50, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(joystick.currentX, joystick.currentY, 20, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.fill();
+        }
+    }
+
+    function drawRadarTo(targetX, targetY, color, layerIndex) {
+         const angleTo = Math.atan2(targetY - player.y, targetX - player.x);
+         const relAngle = angleTo - player.angle;
+         const radius = 60 + layerIndex * 20;
+         ctx.save(); ctx.rotate(relAngle); ctx.translate(radius, 0); ctx.rotate(Math.PI/2);
+         const pulse = (Math.sin(Date.now()/200 + layerIndex) + 1) * 0.5;
+         ctx.fillStyle = color; ctx.globalAlpha = 0.5 + pulse * 0.5;
+         ctx.font = "bold 24px Courier New"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("^", 0, 0);
+         ctx.restore();
+    }
+
+    function drawIndicators() {
+        const margin = 30; const w = width; const h = height; const cx = width / 2; const cy = height / 2;
+        pirates.forEach(p => {
+            const px = p.x - camX; const py = p.y - camY;
+            if (px > 0 && px < w && py > 0 && py < h) return;
+            const dx = px - cx; const dy = py - cy; let ix, iy; const slope = dy / dx;
+            if (dx > 0) { ix = w - margin; iy = cy + (w/2 - margin) * slope; } else { ix = margin; iy = cy - (w/2 - margin) * slope; }
+            if (iy < margin) { iy = margin; ix = cx - (h/2 - margin) / slope; } else if (iy > h - margin) { iy = h - margin; ix = cx + (h/2 - margin) / slope; }
+            ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + Math.sin(Date.now()/100)*0.5})`;
+            ctx.beginPath(); ctx.arc(ix, iy, 15, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.font = "bold 20px Courier New"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", ix, iy);
+        });
+    }
+
+    // INPUT HANDLERS
+    resize(); spawnPlanet(true); requestAnimationFrame(loop);
+
+    window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+    window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+    function startInput(x, y) { if(isGameOver) return; joystick.active = true; joystick.originX = x; joystick.originY = y; joystick.currentX = x; joystick.currentY = y; }
+    function moveInput(x, y) { if (!joystick.active) return; joystick.currentX = x; joystick.currentY = y; }
+    function endInput() { joystick.active = false; }
+    canvas.addEventListener('touchstart', e => startInput(e.touches[0].clientX, e.touches[0].clientY), {passive: false});
+    canvas.addEventListener('touchmove', e => { e.preventDefault(); moveInput(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
+    canvas.addEventListener('touchend', endInput);
+    canvas.addEventListener('mousedown', e => startInput(e.clientX, e.clientY));
+    canvas.addEventListener('mousemove', e => moveInput(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', endInput);
+</script>
+</body>
+</html>
