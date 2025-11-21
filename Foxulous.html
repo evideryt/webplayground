@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Foxulous - Лисий Беспредел</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #ui {
+            position: absolute; top: 10px; left: 10px; color: white;
+            font-weight: bold; text-shadow: 1px 1px 2px black; pointer-events: none;
+        }
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 24px; transition: opacity 0.5s; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui">Foxulous v0.1 <br> Очки: <span id="scoreVal">0</span></div>
+<div id="loading">Призываю лис...</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+/**
+ * Добро пожаловать в спагетти-код.
+ * Если это читает бог программирования — прости меня.
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('scoreVal');
+const loadingEl = document.getElementById('loading');
+
+// Настройки мира
+const WORLD_SIZE = 4000; // Размер карты, чтоб было где разгуляться
+const PLAYER_START_RAD = 30;
+const BOT_COUNT = 30;
+const FOOD_COUNT = 200;
+
+let width, height;
+let cameraX = 0, cameraY = 0;
+let gameRunning = true;
+
+// Состояние ввода (для элиты на ПК)
+const keys = { w: false, a: false, s: false, d: false };
+// Состояние ввода (для пальцевых тыкателей)
+const touchInput = { active: false, startX: 0, startY: 0, currX: 0, currY: 0 };
+
+// --- API и картинки ---
+const FALLBACK_EMOJIS = ['🦊', '🐺', '🐶', '🌭', '🥐', '💩', '😺'];
+const loadedImages = []; // Кэш картинок, чтоб не дудосить API
+
+// Функция добычи лисы. Если API лежит, возвращаем null (будет эмодзи)
+async function fetchFoxUrl() {
+    try {
+        // Добавляем timestamp, чтоб браузер не кэшировал JSON
+        const res = await fetch(`https://api.tinyfox.dev/img.json?animal=fox&t=${Date.now()}`);
+        const data = await res.json();
+        return "https://tinyfox.dev" + data.loc;
+    } catch (e) {
+        // console.log("Лиса сбежала (API error):", e);
+        return null; // Фоллбэк сработает сам
+    }
+}
+
+// Класс сущности (Игрок или Бот)
+class Blob {
+    constructor(x, y, r, isPlayer = false) {
+        this.x = x;
+        this.y = y;
+        this.r = r;
+        this.isPlayer = isPlayer;
+        this.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+        this.vx = 0;
+        this.vy = 0;
+        this.speed = 0;
+        this.maxSpeed = 5;
+        this.image = null;
+        this.emoji = FALLBACK_EMOJIS[Math.floor(Math.random() * FALLBACK_EMOJIS.length)];
+        this.imgLoaded = false;
+        
+        // Попытка загрузить лису для каждого блоба
+        this.loadFox();
+    }
+
+    async loadFox() {
+        const url = await fetchFoxUrl();
+        if (url) {
+            const img = new Image();
+            img.crossOrigin = "Anonymous"; // Важно для канваса
+            img.src = url;
+            img.onload = () => {
+                this.image = img;
+                this.imgLoaded = true;
+            };
+            img.onerror = () => { this.imgLoaded = false; };
+        }
+    }
+
+    update() {
+        // Физика движения (очень примитивная, как мой юмор)
+        if (this.isPlayer) {
+            let dx = 0, dy = 0;
+            
+            // ПК управление
+            if (keys.w || keys.ArrowUp) dy -= 1;
+            if (keys.s || keys.ArrowDown) dy += 1;
+            if (keys.a || keys.ArrowLeft) dx -= 1;
+            if (keys.d || keys.ArrowRight) dx += 1;
+
+            // Мобильное управление (джойстик)
+            if (touchInput.active) {
+                dx = touchInput.currX - touchInput.startX;
+                dy = touchInput.currY - touchInput.startY;
+            }
+
+            // Нормализация вектора
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len > 0) {
+                // Скорость зависит от размера (чем жирнее, тем медленнее)
+                const currentMaxSpeed = 100 / (this.r + 20) + 2; 
+                this.vx = (dx / len) * currentMaxSpeed;
+                this.vy = (dy / len) * currentMaxSpeed;
+            } else {
+                this.vx *= 0.9; // Трение
+                this.vy *= 0.9;
+            }
+        } else {
+            // Логика ботов: рандомное блуждание
+            if (Math.random() < 0.02) {
+                const angle = Math.random() * Math.PI * 2;
+                const currentMaxSpeed = 100 / (this.r + 20) + 2;
+                this.vx = Math.cos(angle) * currentMaxSpeed;
+                this.vy = Math.sin(angle) * currentMaxSpeed;
+            }
+            
+            // Ограничение границ для ботов
+            if (this.x < 0) this.vx = Math.abs(this.vx);
+            if (this.x > WORLD_SIZE) this.vx = -Math.abs(this.vx);
+            if (this.y < 0) this.vy = Math.abs(this.vy);
+            if (this.y > WORLD_SIZE) this.vy = -Math.abs(this.vy);
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Ограничение границ мира
+        this.x = Math.max(this.r, Math.min(WORLD_SIZE - this.r, this.x));
+        this.y = Math.max(this.r, Math.min(WORLD_SIZE - this.r, this.y));
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Рисуем круг-маску
+        ctx.beginPath();
+        ctx.arc(0, 0, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = this.color; // Цветной фон пока грузится картинка
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Рисуем лису или эмодзи
+        if (this.imgLoaded && this.image) {
+            ctx.clip(); // Обрезаем картинку по кругу
+            try {
+                ctx.drawImage(this.image, -this.r, -this.r, this.r * 2, this.r * 2);
+            } catch (e) {
+                // Если CORS решил убить нас в последний момент
+                this.drawEmoji();
+            }
+        } else {
+            this.drawEmoji();
+        }
+
+        // Рисуем очки (массу)
+        ctx.restore(); // Сброс клипа
+        ctx.fillStyle = 'white';
+        ctx.font = `bold ${Math.max(12, this.r / 2)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.strokeText(Math.floor(this.r), this.x, this.y);
+        ctx.fillText(Math.floor(this.r), this.x, this.y);
+    }
+
+    drawEmoji() {
+        ctx.font = `${this.r}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.emoji, 0, 0);
+    }
+}
+
+// Еда
+const foods = [];
+for(let i=0; i<FOOD_COUNT; i++) spawnFood();
+
+function spawnFood() {
+    foods.push({
+        x: Math.random() * WORLD_SIZE,
+        y: Math.random() * WORLD_SIZE,
+        r: 5 + Math.random() * 5,
+        color: `hsl(${Math.random()*360}, 100%, 50%)`
+    });
+}
+
+// Инициализация
+let player = new Blob(WORLD_SIZE/2, WORLD_SIZE/2, PLAYER_START_RAD, true);
+let bots = [];
+for(let i=0; i<BOT_COUNT; i++) {
+    bots.push(new Blob(Math.random()*WORLD_SIZE, Math.random()*WORLD_SIZE, 20 + Math.random() * 40));
+}
+
+// Ресайз экрана
+function resize() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Ввод ---
+window.addEventListener('keydown', e => { keys[e.key] = true; keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.key] = false; keys[e.code] = false; });
+
+// Джойстик логика
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    touchInput.active = true;
+    touchInput.startX = e.touches[0].clientX;
+    touchInput.startY = e.touches[0].clientY;
+    touchInput.currX = touchInput.startX;
+    touchInput.currY = touchInput.startY;
+}, {passive: false});
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (touchInput.active) {
+        touchInput.currX = e.touches[0].clientX;
+        touchInput.currY = e.touches[0].clientY;
+    }
+}, {passive: false});
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    touchInput.active = false;
+});
+
+// --- Главный цикл ---
+function loop() {
+    if (!gameRunning) return;
+
+    // Очистка
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, width, height);
+
+    // Камера следует за игроком
+    // Lerp для плавности (ну почти)
+    cameraX = player.x - width / 2;
+    cameraY = player.y - height / 2;
+
+    ctx.save();
+    ctx.translate(-cameraX, -cameraY);
+
+    // Рисуем сетку (чтобы понимать что мы движемся)
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    const gridSize = 50;
+    const startX = Math.floor(cameraX / gridSize) * gridSize;
+    const startY = Math.floor(cameraY / gridSize) * gridSize;
+    
+    ctx.beginPath();
+    for (let x = startX; x < cameraX + width; x += gridSize) {
+        ctx.moveTo(x, cameraY);
+        ctx.lineTo(x, cameraY + height);
+    }
+    for (let y = startY; y < cameraY + height; y += gridSize) {
+        ctx.moveTo(cameraX, y);
+        ctx.lineTo(cameraX + width, y);
+    }
+    ctx.stroke();
+
+    // Границы мира
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(0, 0, WORLD_SIZE, WORLD_SIZE);
+
+    // Отрисовка и логика еды
+    for (let i = foods.length - 1; i >= 0; i--) {
+        const f = foods[i];
+        
+        // Рисуем
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.r, 0, Math.PI*2);
+        ctx.fillStyle = f.color;
+        ctx.fill();
+
+        // Проверка поедания игроком
+        const dist = Math.hypot(player.x - f.x, player.y - f.y);
+        if (dist < player.r) {
+            player.r += 0.5; // Растем
+            foods.splice(i, 1);
+            spawnFood();
+        }
+    }
+    
+    // Логика ботов (они тоже хотят кушать)
+    bots.forEach(bot => {
+        bot.update();
+        bot.draw();
+        
+        // Столкновение игрока с ботом
+        const dist = Math.hypot(player.x - bot.x, player.y - bot.y);
+        if (dist < player.r + bot.r) {
+            // Кто больше, тот и съел
+            // Даем фору 10%, чтобы не было мерцания
+            if (player.r > bot.r * 1.1) {
+                // Игрок съел бота
+                player.r += bot.r * 0.2;
+                respawnBot(bot);
+            } else if (bot.r > player.r * 1.1) {
+                // 
