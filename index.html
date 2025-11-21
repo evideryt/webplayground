@@ -2,344 +2,281 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WEB.PLAYGROUND</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Roboto+Mono:wght@400;700&family=Rubik+Bubbles&display=swap" rel="stylesheet">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Web Playground</title>
     <style>
-        :root {
-            --primary-color: #00aaff;
-            --background-color: #121212;
-            --module-background: #1e1e1e;
-            --text-color: #e0e0e0;
-            --border-color: #333;
-            --danger-color: #ff4500;
-        }
+        /* СБРОС И БАЗА */
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { overflow: hidden; font-family: 'Segoe UI', sans-serif; height: 100vh; width: 100vw; position: fixed; }
 
-        body {
-            background-color: var(--background-color);
-            color: var(--text-color);
-            font-family: 'Roboto Mono', monospace;
-            font-size: 16px;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            overflow-x: hidden;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 25px;
-        }
-
-        .playground-module {
-            background: var(--module-background);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        /* КОНТЕЙНЕР СЛАЙДОВ */
+        .slider-container {
             display: flex;
+            width: 300vw; /* 3 слайда */
+            height: 100%;
+            transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+            will-change: transform;
+        }
+
+        /* ОБЩИЙ СТИЛЬ СЛАЙДА */
+        .slide {
+            width: 100vw;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            perspective: 1000px; /* Для 3D магии */
         }
 
-        h1, h2 {
-            font-family: 'Rubik Bubbles', cursive;
-            color: var(--primary-color);
-            text-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
-            margin-top: 0;
-        }
-        
-        button {
-            background-color: var(--primary-color);
-            color: var(--background-color);
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-family: 'Roboto Mono', monospace;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 10px;
-        }
-        button:hover { background-color: #00c3ff; transform: scale(1.05); }
-        button:disabled { background-color: #555; color: #888; cursor: not-allowed; }
-        
-        input, textarea {
-            background-color: #2a2a2a;
-            color: var(--text-color);
-            border: 1px solid #444;
-            padding: 8px;
-            border-radius: 4px;
-            width: calc(100% - 18px);
-            font-family: 'Roboto Mono', monospace;
+        /* 3D КАРТОЧКА */
+        .card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 20px;
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            transform-style: preserve-3d;
+            transition: transform 0.3s ease;
+            animation: float 6s ease-in-out infinite;
         }
 
-        .status-note {
-            font-size: 12px;
-            color: #aaa;
-            background-color: #2a2a2a;
-            padding: 8px;
-            border-radius: 4px;
-            margin-top: 10px;
+        /* Анимация левитации, чтобы выглядело дорого */
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotateX(0) rotateY(0); }
+            50% { transform: translateY(-10px) rotateX(2deg) rotateY(2deg); }
         }
-        .status-note.error { color: var(--danger-color); }
-        
-        #draggable-window {
-            position: absolute;
-            z-index: 10;
-            background-color: #2c2c2c;
-            border: 1px solid #555;
-            border-radius: 8px;
-            width: 300px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            left: calc(50% - 150px);
-            top: 200px;
-            touch-action: none;
-        }
-        #window-header { padding: 10px; cursor: move; background-color: var(--primary-color); color: var(--background-color); font-weight: bold; border-top-left-radius: 7px; border-top-right-radius: 7px; }
-        #window-content { padding: 15px; }
-        
-        #device-info { background-color: #0d0d0d; padding: 10px; border-radius: 5px; font-size: 13px; white-space: pre-wrap; word-wrap: break-word; }
-        
-        #camera-feed { width: 100%; max-width: 100%; border-radius: 5px; background-color: #000; aspect-ratio: 4 / 3; }
 
-        #shake-indicator { flex-grow: 1; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #555; border: 2px dashed var(--border-color); border-radius: 5px; text-align: center; transition: all 0.2s ease; }
-        #shake-indicator.shaken { color: var(--danger-color); border-color: var(--danger-color); transform: scale(1.1); }
+        /* --- СЛАЙД 1: ИНТРО --- */
+        .slide-1 {
+            background-color: #ffdab9; /* Персиковый, как попка младенца */
+            color: #333;
+        }
+        .slide-1 h1 { font-size: 2.5rem; margin-bottom: 10px; transform: translateZ(30px); }
+        .slide-1 p { font-size: 1.2rem; margin-bottom: 20px; transform: translateZ(20px); }
+        .slide-1 .hint { font-size: 0.8rem; opacity: 0.6; transform: translateZ(10px); }
+
+        /* --- СЛАЙД 2: VLONEX --- */
+        .slide-2 {
+            background-color: #fff;
+            /* Тетрадка в клетку. Классика школьной скамьи */
+            background-image: 
+                linear-gradient(#e1e1e1 1px, transparent 1px),
+                linear-gradient(90deg, #e1e1e1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .vlonex-anim {
+            height: 100px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            margin: 20px 0;
+            transform: translateZ(40px);
+        }
+        .dancer { font-size: 3rem; animation: jump 0.8s infinite alternate ease-in-out; }
+        .platform {
+            width: 60px; height: 10px; background: #0f0; 
+            border: 2px solid #000; border-radius: 5px; 
+            margin-top: -5px; z-index: -1;
+        }
+        @keyframes jump {
+            0% { transform: translateY(0) scale(1.1, 0.9); }
+            100% { transform: translateY(-40px) scale(0.9, 1.1); }
+        }
+        .btn-vlonex {
+            background: #0f0; color: #000;
+            font-family: 'Impact', sans-serif; letter-spacing: 1px;
+            font-size: 1.5rem; padding: 10px 30px;
+            border: 3px solid #000; cursor: pointer; text-decoration: none;
+            display: inline-block; text-transform: uppercase;
+            transform: translateZ(50px);
+            transition: transform 0.1s;
+        }
+        .btn-vlonex:active { transform: translateZ(40px) scale(0.95); }
+
+        /* --- СЛАЙД 3: VECTOR SPACE --- */
+        .slide-3 { background: #000; color: #fff; position: relative; }
+        /* Звезды. Много CSS боли ради "размытия" */
+        .stars {
+            position: absolute; width: 100%; height: 100%; top: 0; left: 0;
+            background: radial-gradient(ellipse at center, rgba(27,39,53,0) 0%, #090a0f 100%);
+            overflow: hidden; z-index: -1;
+        }
+        .star-layer {
+            position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
+            background: transparent;
+            box-shadow: 
+                -200px -100px #fff, 200px 100px #fff, -150px 200px #fff, 
+                150px -250px #fff, 0px -300px #fff, -300px 50px #fff;
+            animation: warp 2s linear infinite;
+            opacity: 0;
+        }
+        .star-layer:nth-child(2) { animation-delay: 0.6s; transform: scale(0.5); }
+        .star-layer:nth-child(3) { animation-delay: 1.2s; transform: scale(0.8); }
+
+        @keyframes warp {
+            0% { transform: scale(0.1); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: scale(4); opacity: 0; }
+        }
         
-        #physics-canvas { width: 100%; height: 400px; background-color: #0d0d0d; border-radius: 5px; cursor: crosshair; }
+        .triangle-ship {
+            font-size: 4rem; color: #fff;
+            text-shadow: 0 0 10px cyan;
+            animation: fly 3s ease-in-out infinite;
+            display: block; margin-bottom: 10px;
+        }
+        @keyframes fly {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(10px) rotate(5deg); }
+        }
+        .btn-space {
+            background: #000; color: #fff;
+            font-family: 'Courier New', Courier, monospace; font-weight: bold;
+            padding: 15px 20px; border: 2px solid #fff;
+            text-decoration: none; display: inline-block;
+            margin-top: 15px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+
+        /* НАВИГАЦИЯ (СТРЕЛКИ) */
+        .nav-btn {
+            position: fixed; top: 50%; transform: translateY(-50%);
+            font-size: 3rem; color: rgba(0,0,0,0.2); cursor: pointer;
+            z-index: 100; display: none; /* Скрыты на мобилках */
+            padding: 20px; transition: color 0.3s;
+        }
+        .nav-btn:hover { color: rgba(0,0,0,0.8); }
+        .nav-left { left: 10px; }
+        .nav-right { right: 10px; }
+
+        /* Показываем стрелки только если экран горизонтальный */
+        @media (orientation: landscape) {
+            .nav-btn { display: block; }
+        }
+        /* Адаптация цветов стрелок для темного слайда */
+        body[data-slide="2"] .nav-btn { color: rgba(255,255,255,0.3); }
+        body[data-slide="2"] .nav-btn:hover { color: rgba(255,255,255,0.9); }
+
     </style>
 </head>
-<body>
+<body data-slide="0">
 
-    <center><h1>WEB.PLAYGROUND</h1><p>Лаборатория цифровых возможностей. Теперь с мобильной магией.</p></center>
+    <!-- СТРЕЛКИ -->
+    <div class="nav-btn nav-left" onclick="move(-1)">&#10094;</div>
+    <div class="nav-btn nav-right" onclick="move(1)">&#10095;</div>
 
-    <div class="container">
+    <div class="slider-container" id="slider">
         
-        <div class="playground-module">
-            <h2>1. Детектор Устройства</h2>
-            <p>Ваш цифровой паспорт. Теперь с корректными данными.</p>
-            <pre id="device-info">Нажмите кнопку для сканирования...</pre>
-            <button onclick="detectDeviceInfo()">Сканировать</button>
-        </div>
-
-        <div class="playground-module">
-            <h2>2. Доступ к Камере</h2>
-            <p>Дайте разрешение, чтобы увидеть себя.</p>
-            <video id="camera-feed" playsinline autoplay muted></video>
-            <button onclick="startCamera()">Включить камеру</button>
-            <p id="camera-status" class="status-note">Статус: неактивна.</p>
-        </div>
-
-        <div class="playground-module">
-            <h2>3. Шейк-контроль</h2>
-            <p>Нажмите "Активировать", а затем потрясите телефон.</p>
-            <div id="shake-indicator">Сенсор неактивен</div>
-            <button id="request-motion-btn" onclick="requestMotionPermission()">Активировать сенсор</button>
-        </div>
-
-        <div class="playground-module" style="position: relative; min-height: 300px;">
-            <h2>4. Drag-and-Drop</h2>
-            <p>Схватите это окно и таскайте. Работает на мыши и тачскрине.</p>
-            <div id="draggable-window">
-                <div id="window-header">Тащи меня!</div>
-                <div id="window-content">Я двигаюсь!</div>
+        <!-- СЛАЙД 1 -->
+        <section class="slide slide-1">
+            <div class="card">
+                <h1>Привет!</h1>
+                <p>Здесь ты можешь познакомиться со всякими веб-прикольчиками, которые лежат у меня на гитхабе.</p>
+                <p class="hint">Листай свайпами, стрелками или WASD (если ты киберспортсмен)</p>
             </div>
-        </div>
-        
-        <div class="playground-module">
-            <h2>5. CSS Фильтры и Base64</h2>
-            <p>Примените эффекты к изображению ниже.</p>
-            <img src="https://picsum.photos/400/200" alt="Placeholder" id="filtered-img" style="width:100%; height: auto; object-fit: cover; border-radius: 5px; transition: filter 0.4s ease;">
-            <div>
-                <button onclick="applyFilter('none')">Норма</button>
-                <button onclick="applyFilter('blur(5px)')">Блюр</button>
-                <button onclick="applyFilter('grayscale(100%)')">Ч/Б</button>
+        </section>
+
+        <!-- СЛАЙД 2 -->
+        <section class="slide slide-2">
+            <div class="card" style="border: 2px solid #333;">
+                <h2 style="font-family: 'Impact', sans-serif; letter-spacing: 1px;">Vlonex Jump</h2>
+                <div class="vlonex-anim">
+                    <div class="dancer">🕺</div>
+                </div>
+                <div class="platform" style="margin: 0 auto 20px auto;"></div>
+                <p style="font-family: 'Comic Sans MS', cursive; font-size: 0.9rem; margin-bottom: 15px;">
+                    Lima Sky украли у меня эту идею! Управляй Влонексом и постарайся не упасть.
+                </p>
+                <a href="https://evideryt.github.io/webplayground/VlonexJump.html" class="btn-vlonex">ПОГНАЛИ</a>
             </div>
-            <p style="margin-top: 15px;">Картинка в Base64 (вставьте свой код):</p>
-            <img src="data:image/jpeg;base64,❗❗❗❗❗" alt="Base64 placeholder" style="width: 100px;">
-        </div>
-        
-        <div class="playground-module">
-            <h2>6. Типографика</h2>
-            <p>Нажмите, чтобы сменить шрифт:</p>
-            <p id="font-demo-text" style="font-size: 24px; text-align: center; border: 2px dashed var(--border-color); padding: 10px; transition: font-family 0.5s ease;">Привет, мир!</p>
-            <button onclick="cycleFont()">Сменить шрифт</button>
-        </div>
+        </section>
+
+        <!-- СЛАЙД 3 -->
+        <section class="slide slide-3">
+            <div class="stars">
+                <div class="star-layer"></div>
+                <div class="star-layer"></div>
+                <div class="star-layer"></div>
+            </div>
+            <div class="card" style="background: rgba(0,0,0,0.7); border: 1px solid #fff; color: #fff;">
+                <div class="triangle-ship">∆</div>
+                <h2 style="font-family: 'Courier New', monospace;">VectorSpace</h2>
+                <p style="font-size: 0.9rem; margin: 10px 0; font-family: 'Courier New', monospace;">
+                    Сжатый до предела десятиминутный рогалик. Путешествуй по космосу на треугольнике и отбивайся от пиратов.
+                </p>
+                <a href="https://evideryt.github.io/webplayground/VectorSpace.html" class="btn-space">В ПУТЬ</a>
+            </div>
+        </section>
 
     </div>
-    
-    <div class="container" style="margin-top: 25px;">
-        <div class="playground-module" style="grid-column: 1 / -1;">
-            <h2>7. Физическая песочница</h2>
-            <p>Кликните или коснитесь черной области, чтобы создать объекты.</p>
-            <div id="physics-canvas"></div>
-        </div>
-    </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
-    
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
+        let currentSlide = 0;
+        const totalSlides = 3;
+        const slider = document.getElementById('slider');
+        const body = document.body;
 
-        // --- МОДУЛИ И ИХ ЛОГИКА ---
-
-        // МОДУЛЬ 1: Детектор устройства
-        window.detectDeviceInfo = function() {
-            const infoEl = document.getElementById('device-info');
-            const info = `
---- Экран ---
-Физическое разрешение: ${window.screen.width}x${window.screen.height}
-Размер вьюпорта (CSS): ${window.innerWidth}x${window.innerHeight}
-Соотношение пикселей: ${window.devicePixelRatio.toFixed(2)}
-(На HiDPI/Retina экранах вьюпорт меньше физич. разрешения)
-
---- Устройство ---
-User Agent: ${navigator.userAgent}
-Ядра процессора: ${navigator.hardwareConcurrency || 'Неизвестно'}
-Онлайн: ${navigator.onLine}
-            `;
-            infoEl.textContent = info.trim();
-        };
-
-        // МОДУЛЬ 2: Камера
-        window.startCamera = async function() {
-            const videoEl = document.getElementById('camera-feed');
-            const statusEl = document.getElementById('camera-status');
-
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                statusEl.textContent = "Ошибка: Доступ к камере возможен только через HTTPS или с локального сервера.";
-                statusEl.classList.add('error');
-                return;
-            }
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                statusEl.textContent = "Ошибка: API камеры не поддерживается в этом браузере.";
-                statusEl.classList.add('error');
-                return;
-            }
-
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                videoEl.srcObject = stream;
-                statusEl.textContent = "Статус: камера активна.";
-                statusEl.classList.remove('error');
-            } catch (err) {
-                if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-                    statusEl.textContent = "Ошибка: Вы не дали разрешение на использование камеры.";
-                } else {
-                    statusEl.textContent = `Ошибка: ${err.name}`;
-                }
-                statusEl.classList.add('error');
-            }
-        };
-
-        // МОДУЛЬ 3: Детектор тряски
-        const shakeIndicator = document.getElementById('shake-indicator');
-        const motionButton = document.getElementById('request-motion-btn');
-        
-        window.requestMotionPermission = async function() {
-            // Для iOS 13+ требуется явное разрешение
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                try {
-                    const permissionState = await DeviceMotionEvent.requestPermission();
-                    if (permissionState === 'granted') {
-                        addMotionListener();
-                    } else {
-                        shakeIndicator.textContent = 'Доступ запрещен';
-                    }
-                } catch (error) {
-                    shakeIndicator.textContent = 'Ошибка запроса';
-                }
-            } else {
-                // Для Android и других устройств
-                addMotionListener();
-            }
-        };
-
-        function addMotionListener() {
-            shakeIndicator.textContent = 'Сенсор активен. Трясите!';
-            motionButton.disabled = true;
-            let lastShakeTime = 0;
-            const shakeThreshold = 15;
-
-            window.addEventListener('devicemotion', (event) => {
-                if (event.accelerationIncludingGravity) {
-                    const { x, y, z } = event.accelerationIncludingGravity;
-                    const acceleration = Math.sqrt(x*x + y*y + z*z);
-                    const now = Date.now();
-                    
-                    if (acceleration > shakeThreshold && now - lastShakeTime > 1000) {
-                        lastShakeTime = now;
-                        shakeIndicator.classList.add('shaken');
-                        setTimeout(() => shakeIndicator.classList.remove('shaken'), 500);
-                    }
-                }
-            });
+        // Функция переключения
+        function updateSlider() {
+            slider.style.transform = `translateX(-${currentSlide * 100}vw)`;
+            body.setAttribute('data-slide', currentSlide); // Для смены цвета стрелок
         }
 
-        // МОДУЛЬ 4: Перетаскивание
-        const draggable = document.getElementById('draggable-window');
-        const header = document.getElementById('window-header');
-        let isDragging = false, offsetX, offsetY;
-        const dragStart = (e) => {
-            isDragging = true;
-            const cX = e.clientX || e.touches[0].clientX;
-            const cY = e.clientY || e.touches[0].clientY;
-            offsetX = cX - draggable.getBoundingClientRect().left;
-            offsetY = cY - draggable.getBoundingClientRect().top;
-            e.preventDefault();
-        };
-        const dragMove = (e) => {
-            if (!isDragging) return;
-            const cX = e.clientX || e.touches[0].clientX;
-            const cY = e.clientY || e.touches[0].clientY;
-            draggable.style.left = `${cX - offsetX}px`;
-            draggable.style.top = `${cY - offsetY}px`;
-        };
-        const dragEnd = () => isDragging = false;
-        header.addEventListener('mousedown', dragStart);
-        header.addEventListener('touchstart', dragStart, { passive: false });
-        document.addEventListener('mousemove', dragMove);
-        document.addEventListener('touchmove', dragMove);
-        document.addEventListener('mouseup', dragEnd);
-        document.addEventListener('touchend', dragEnd);
+        function move(dir) {
+            currentSlide += dir;
+            if (currentSlide < 0) currentSlide = 0;
+            if (currentSlide >= totalSlides) currentSlide = totalSlides - 1;
+            updateSlider();
+        }
 
-        // МОДУЛЬ 5: Фильтры
-        window.applyFilter = (val) => document.getElementById('filtered-img').style.filter = val;
+        // --- КЛАВИАТУРА (WASD + Стрелки) ---
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'arrowright' || key === 'd') move(1);
+            if (key === 'arrowleft' || key === 'a') move(-1);
+        });
 
-        // МОДУЛЬ 6: Шрифты
-        const fonts = ["'Lobster', cursive", "'Rubik Bubbles', cursive", "'Roboto Mono', monospace"];
-        let fontIdx = 0;
-        window.cycleFont = () => {
-            fontIdx = (fontIdx + 1) % fonts.length;
-            document.getElementById('font-demo-text').style.fontFamily = fonts[fontIdx];
-        };
+        // --- СВАЙПЫ (TOUCH) ---
+        let touchStartX = 0;
+        let touchEndX = 0;
 
-        // МОДУЛЬ 7: Физика
-        const physicsContainer = document.getElementById('physics-canvas');
-        const { Engine, Render, Runner, Bodies, Composite } = Matter;
-        const engine = Engine.create({ gravity: { y: 0.8 } });
-        const render = Render.create({ element: physicsContainer, engine, options: { width: physicsContainer.clientWidth, height: 400, wireframes: false, background: '#0d0d0d' } });
-        const ground = Bodies.rectangle(physicsContainer.clientWidth / 2, 400, physicsContainer.clientWidth, 60, { isStatic: true, render: { fillStyle: '#333' } });
-        Composite.add(engine.world, [ground]);
-        const addBody = (e) => {
-            const rect = physicsContainer.getBoundingClientRect();
-            const x = (e.clientX || e.touches[0].clientX) - rect.left;
-            const y = (e.clientY || e.touches[0].clientY) - rect.top;
-            const color = `hsl(${Math.random() * 360}, 100%, 75%)`;
-            const body = Math.random() > 0.5 ? Bodies.rectangle(x, y, 40, 40, { restitution: 0.5, render: { fillStyle: color } }) : Bodies.circle(x, y, 25, { restitution: 0.8, render: { fillStyle: color } });
-            Composite.add(engine.world, body);
-        };
-        physicsContainer.addEventListener('mousedown', addBody);
-        physicsContainer.addEventListener('touchstart', addBody);
-        Render.run(render);
-        Runner.run(Runner.create(), engine);
-    });
+        document.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            if (touchEndX < touchStartX - 50) move(1); // Свайп влево (след. слайд)
+            if (touchEndX > touchStartX + 50) move(-1); // Свайп вправо (пред. слайд)
+        }
+
+        // --- 3D ЭФФЕКТ ДЛЯ КАРТОЧЕК (при движении мыши) ---
+        // Это чтобы прям вообще "дорого-богато" было на компе
+        document.querySelectorAll('.slide').forEach(slide => {
+            slide.addEventListener('mousemove', (e) => {
+                const card = slide.querySelector('.card');
+                const xAxis = (window.innerWidth / 2 - e.pageX) / 25;
+                const yAxis = (window.innerHeight / 2 - e.pageY) / 25;
+                card.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+            });
+            
+            // Сброс при уходе мыши
+            slide.addEventListener('mouseleave', (e) => {
+                const card = slide.querySelector('.card');
+                card.style.transform = `rotateY(0deg) rotateX(0deg)`;
+            });
+        });
+
     </script>
 </body>
 </html>
