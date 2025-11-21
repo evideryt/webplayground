@@ -14,7 +14,6 @@
                 linear-gradient(#cce0ff 1px, transparent 1px),
                 linear-gradient(90deg, #cce0ff 1px, transparent 1px);
             background-size: 30px 30px;
-            background-position: -1px -1px;
             font-family: 'Impact', sans-serif;
             touch-action: none;
             user-select: none;
@@ -58,6 +57,7 @@
             display: none;
             pointer-events: auto;
             box-shadow: 0 4px 0 black;
+            text-shadow: 1px 1px 0 #000;
         }
         #clap-btn:active {
             transform: translateY(4px);
@@ -104,7 +104,8 @@
             z-index: 10;
         }
 
-        h1 { font-size: 50px; margin: 0; color: #333; }
+        h1 { font-size: 50px; margin: 0; color: #333; text-transform: uppercase; line-height: 1.1; }
+        .subtitle { font-size: 24px; margin: 5px 0 20px 0; color: #555; }
         p { font-size: 20px; margin: 10px 20px; }
         
         button.start-btn {
@@ -119,6 +120,11 @@
             font-family: 'Impact';
             color: white;
             border: 2px solid black;
+            box-shadow: 3px 3px 0 #000;
+        }
+        button.start-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0 #000;
         }
         
         .serif-font {
@@ -132,7 +138,7 @@
 
     <canvas id="gameCanvas"></canvas>
     <div id="red-screen"></div>
-    <div id="mom-alert">ЖИРНАЯ МАМАША<br>ВЛОНЕКФА АТАКУЕТ!</div>
+    <div id="mom-alert">ЖИРНАЯ МАМАША<br>АТАКУЕТ!</div>
 
     <div id="ui-layer">
         <div id="score">0</div>
@@ -140,73 +146,160 @@
     </div>
 
     <div id="menu-screen">
-        <h1 id="title-text">Vlonex Jump</h1>
-        <p id="desc-text">Управление пальцем.<br>Физика замедлена для кайфа.</p>
-        <div id="gameover-text" style="display:none;"></div>
-        <button class="start-btn" onclick="startGame()">ПОГНАЛИ</button>
+        <h1 id="title-main">VLONEX JUMP</h1>
+        <div id="title-sub" class="subtitle">Путь в никуда</div>
+        
+        <div id="gameover-text" style="display:none; margin-bottom: 20px;"></div>
+        <button id="start-btn-el" class="start-btn" onclick="startGame()">Вперёд</button>
     </div>
 
 <script>
 /* 
 =================================================================
-   КОНФИГ (НАСТРОЙКИ)
-   Теперь адаптировано под плавный геймплей на 60-120гц
+   КОНФИГ
 =================================================================
 */
 
 const CONFIG = {
-    // --- Физика (Сделали "лунную", чтобы было проще) ---
+    // --- Физика ---
     playerEmoji: "🕺",
-    gravity: 0.15,            // Было 0.4 -> стало меньше (плавнее падение)
-    jumpForce: -6.5,          // Было -11 -> стало меньше (но из-за низкой гравитации прыгает норм)
-    jetpackForce: -15,        // Сила прыжка от Баса
-    moveSmoothing: 0.1,       // Инертность движения за пальцем (чем меньше, тем плавнее)
+    gravity: 0.15,
+    jumpForce: -6.5,
+    
+    jetpackForce: -15,      // Обычный басс
+    ottForce: -35,          // OTT
+    
+    moveSmoothing: 0.1,
     
     // --- Платформы ---
     platformWidth: 75,
     platformHeight: 15,
-    
-    // Дистанция спауна. 
-    // ВАЖНО: MaxGap теперь рассчитывается автоматически в коде, 
-    // чтобы не превышать 90% высоты прыжка.
-    minGap: 60,               // Минимальное расстояние между платформами
-
-    movingSpeedStart: 1.0,    // Платформы ползают медленнее
+    minGap: 60, 
+    movingSpeedStart: 1.0,
     
     // --- Сложность ---
-    difficultyScale: 20000,   // Было 5000. Чем больше число, тем МЕДЛЕННЕЕ нарастает сложность.
-                              // Сейчас нужно набрать 20к очков, чтобы дойти до макс сложности.
+    difficultyScale: 20000,
 
     // --- Бонусы (Шансы: 1 к X) ---
-    chanceButter: 25,
-    chanceClap: 15,
-    chanceSoundgoodizer: 35,
-    chanceBass: 50,
+    chanceButter: 50,
+    chanceClap: 30,
+    chanceSoundgoodizer: 70,
+    chanceBass: 100,   
+    chanceOTT: 300,    
     
     // --- Мамаша ---
-    momAttackChance: 200,     // Чуть реже атакует (было 150)
-    momProjectileSpeed: 2.5,  // Летит чуть медленнее
+    momAttackChance: 200,
+    momProjectileSpeed: 2.5,
     momProjectileColor: "#7a5901",
     momProjectileSize: 40,
 
-    // --- Тексты ---
+    // --- ТЕКСТЫ ---
     texts: {
-        butter: "Мафло! (слоу-мо)",
-        clap: "Клӭп! (+3 дабл джампа)",
-        sound: "Саундгудізєр! (кайфуем)",
-        bass: "Гофрірованный BASS",
-        bassSub: "от Рокетмана",
-        deathFallTitle: "Влонекф упал и разбился к хуям собачьим",
-        deathFallSub: "Туда ему, лоху, и дорога. Бебебе.",
-        deathMomTitle: "Влонекф не вынес дипломатической мощи мамаши и сдох",
-        deathMomSub: "После этого он вознёсся в садовое товарищество",
-        deathMomEpic: ", , М о с с а д , ,"
+        subtitles: [
+            "Путь в никуда",
+            "Как Дудл Джамп, но для бедных",
+            "...и Проклятье OTT",
+            "Симулятор скакания",
+            "Палец Вверх Edition"
+        ],
+        btnRetry: [
+            "ЕЩЁ РАЗ",
+            "РЕВАНШ",
+            "ПОПРЫГАЛИ",
+            "ЗАНОВО",
+            "ДАВАЙ ЕЩЁ"
+        ],
+        // БОНУСЫ (Название фиксировано, описание меняется)
+        butterSub: [
+            "Вязко, как у бати в гараже",
+            "Сливочное, 82.5%",
+            "Физика вышла покурить",
+            "Интернет лагает? А, не...",
+            "Чилл-зона 10 секунд"
+        ],
+        clapSub: [
+            "Овации твоему скиллу",
+            "+3 Прыжка (легально)",
+            "Руки вверх!",
+            "Спасай свою шкуру",
+            "Хлопай ресницами и взлетай"
+        ],
+        soundSub: [
+            "Делаем жир, убираем брак",
+            "Никаких ям, только хиты",
+            "Режим Бога (временный)",
+            "Идеальный мастеринг",
+            "ГОСТ 3228-95, всё надежно"
+        ],
+        bassSub: [
+            "Подброс от Рокетмана",
+            "Сабвуфер в багажнике",
+            "Низко пошел, к дождю",
+            "Осторожно, горячо",
+            "Эконом-класс авиалиний"
+        ],
+        ottSub: [
+            "ПЕРЕЖАТО В ХЛАМИНУ",
+            "УШИ В КРОВЬ, ПОЛЕТ НОРМАЛЬНЫЙ",
+            "Илон Маск просил вернуть ракету",
+            "КРАСНАЯ КОЛБАСКА",
+            "ЖИРНЮЩИЙ БУСТ"
+        ],
+        
+        // ГЕЙМОВЕРЫ - ПАДЕНИЕ
+        deathFall: [
+            { t: "Влонекф упал и разбился вдребезги", s: "Туда ему, лоху, и дорога. Бебебе." },
+            { t: "Гравитация бессердечна", s: "Ньютон тебя переиграл и уничтожил." },
+            { t: "Потрачено.", s: "Даже моя бабка лучше прыгает." },
+            { t: "Земля тебе пухом", s: "Влонекф стал лепёшкой. R.I.P." },
+            { t: "Неудачное приземление", s: "Соберись уже, ну!" }
+        ],
+        
+        // ГЕЙМОВЕРЫ - МАМАША (Специфические)
+        deathMom: [
+            { t: "Влонекф не вынес дипломатической мощи", s: "После этого он вознёсся в садовое товарищество", epic: ", , М о с с а д , ," },
+            { t: "Председатель СНТ вынес приговор", s: "Ты исключен из дачного кооператива. Посмертно.", epic: ", , М о с с а д , ," },
+            { t: "АННИГИЛИРОВАН ВЕСОМ", s: "Слишком много авторитета в одном снаряде.", epic: "" },
+            { t: "ЖИРНАЯ АТАКА ПРОШЛА УСПЕШНО", s: "Влонекф не смог увернуться от фактов.", epic: "" },
+            { t: "Влонекф не вывез базара", s: "Атака сверху оказалась слишком эффективной.", epic: "" }
+        ]
     }
 };
 
+// --- АУДИО СИСТЕМА ---
+const audioFiles = {
+    jump: 'jump.ogg',
+    break: 'break.ogg',
+    mom: 'mom.ogg',
+    ott: 'ott.ogg',
+    bass: 'bass.ogg',
+    clap: 'clap.ogg',
+    slow: 'slow.ogg',
+    sound: 'sound.ogg',
+    fall: 'fall.ogg',
+    win: 'win.ogg'
+};
+
+const sounds = {};
+for (let key in audioFiles) {
+    let a = new Audio(audioFiles[key]);
+    a.volume = 0.4;
+    sounds[key] = a;
+}
+
+function playSound(name) {
+    try {
+        if (sounds[name]) {
+            sounds[name].currentTime = 0;
+            let promise = sounds[name].play();
+            if (promise !== undefined) { promise.catch(error => {}); }
+        }
+    } catch (e) {}
+}
+
 /* 
 =================================================================
-   ЛОГИКА
+   ДВИЖОК
 =================================================================
 */
 
@@ -216,7 +309,10 @@ const scoreEl = document.getElementById('score');
 const clapBtn = document.getElementById('clap-btn');
 const clapCountSpan = document.getElementById('clap-count');
 const menuScreen = document.getElementById('menu-screen');
+const titleMain = document.getElementById('title-main');
+const titleSub = document.getElementById('title-sub');
 const gameOverDiv = document.getElementById('gameover-text');
+const startBtnEl = document.getElementById('start-btn-el');
 const redScreen = document.getElementById('red-screen');
 const momAlert = document.getElementById('mom-alert');
 
@@ -227,36 +323,34 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// Переменные
 let gameRunning = false;
 let score = 0;
-let cameraY = 0;
-let difficulty = 0; // 0.0 - 1.0
+let bgY = 0; 
+let difficulty = 0;
 let frames = 0;
 let timeScale = 1.0; 
-
-// Расчетная высота прыжка для генератора
 let calculatedMaxJumpHeight = 0;
 
-// Игрок
 let player = { x: 0, y: 0, vy: 0, width: 40, height: 40, clapCharges: 0 };
 let inputX = 0;
 
-// Списки
 let platforms = [];
 let bonuses = [];
 let particles = [];
 let hazards = [];
-
-// Отслеживание высоты последнего спавна
 let highestPlatformY = 0;
 
+let soundgoodizerActive = false;
+let soundgoodizerTimer = 0;
+let butterTimer = 0;
+
+function rndArr(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
 function initGame() {
-    // Расчет физики
-    // h = v^2 / (2g)
     let h = (Math.abs(CONFIG.jumpForce) * Math.abs(CONFIG.jumpForce)) / (2 * CONFIG.gravity);
     calculatedMaxJumpHeight = h;
-    console.log("Max Jump Height calculated: " + Math.floor(h) + "px");
 
     player.x = canvas.width / 2 - 20;
     player.y = canvas.height - 200;
@@ -265,30 +359,28 @@ function initGame() {
     inputX = canvas.width / 2;
     
     score = 0;
-    cameraY = 0;
+    bgY = 0;
     timeScale = 1.0;
     difficulty = 0;
+    soundgoodizerActive = false;
     
     platforms = [];
     bonuses = [];
     particles = [];
     hazards = [];
     
-    // Стартовая платформа
     let startP = {
         x: canvas.width / 2 - CONFIG.platformWidth / 2,
         y: canvas.height - 100,
         type: 'normal',
         vx: 0,
-        broken: false
+        broken: false,
+        bounce: 0
     };
     platforms.push(startP);
     highestPlatformY = startP.y;
     
-    // Генерируем уровень вверх
-    while (highestPlatformY > -100) {
-        spawnNextPlatform();
-    }
+    while (highestPlatformY > -100) spawnNextPlatform();
     
     gameRunning = true;
     updateUI();
@@ -296,48 +388,31 @@ function initGame() {
 }
 
 function spawnNextPlatform() {
-    // Обновляем сложность
     difficulty = Math.min(score / CONFIG.difficultyScale, 1);
 
-    // Расчет дистанции (Y)
-    // Минимальный гэп + добавка от сложности
-    // Но строго ограничиваем 90% от высоты прыжка
     let maxSafeGap = calculatedMaxJumpHeight * 0.9;
-    
-    // Плавное нарастание дистанции
-    // В начале (diff 0) дистанция minGap
-    // В конце (diff 1) дистанция maxSafeGap
     let currentTargetGap = CONFIG.minGap + (maxSafeGap - CONFIG.minGap) * difficulty;
+    let gap = currentTargetGap + (Math.random() * 20 - 10); 
     
-    // Немного рандома, чтобы не было скучно (+/- 10%)
-    let variance = (Math.random() * 20 - 10); 
-    let gap = currentTargetGap + variance;
-    
-    // Жесткий кап: ни при каких условиях не превышаем 90% высоты прыжка
     if (gap > maxSafeGap) gap = maxSafeGap;
     if (gap < CONFIG.minGap) gap = CONFIG.minGap;
 
     let y = highestPlatformY - gap;
     highestPlatformY = y;
 
-    // Тип платформы
-    // Белые (одноразовые): макс 30%
     let chanceWhite = 0.05 + (0.25 * difficulty);
-    // Движущиеся: макс 30%
     let chanceMoving = 0.05 + (0.25 * difficulty);
     
     let type = 'normal';
     let rand = Math.random();
 
     if (soundgoodizerActive) {
-        if (rand < 0.5) type = 'normal';
-        else type = 'moving';
+        type = 'normal'; 
     } else {
         if (rand < chanceWhite) type = 'white';
         else if (rand < chanceWhite + chanceMoving) type = 'moving';
     }
 
-    // Позиция X
     let w = CONFIG.platformWidth;
     let x = Math.random() * (canvas.width - w);
     
@@ -346,23 +421,25 @@ function spawnNextPlatform() {
         y: y,
         type: type,
         vx: 0,
-        broken: false
+        broken: false,
+        bounce: 0
     };
 
     if (type === 'moving') {
-        let speed = CONFIG.movingSpeedStart * (1 + difficulty); // Скорость растет всего в 2 раза к финалу
+        let speed = CONFIG.movingSpeedStart * (1 + difficulty); 
         p.vx = Math.random() > 0.5 ? speed : -speed;
     }
 
     platforms.push(p);
 
-    // Бонус?
-    if (!p.broken && Math.random() < 0.3) {
-        spawnBonus(p);
-    }
+    if (!p.broken && Math.random() < 0.3) spawnBonus(p);
 }
 
 function spawnBonus(platform) {
+    if (Math.random() < 1/CONFIG.chanceOTT) {
+        bonuses.push({x: platform.x + 15, y: platform.y - 35, type: 'ott', platform: platform});
+        return;
+    }
     if (Math.random() < 1/CONFIG.chanceBass) {
         bonuses.push({x: platform.x + 15, y: platform.y - 30, type: 'bass', platform: platform});
         return;
@@ -381,16 +458,12 @@ function spawnBonus(platform) {
     }
 }
 
-// Таймеры эффектов
-let soundgoodizerActive = false;
-let soundgoodizerTimer = 0;
-let butterTimer = 0;
-
 function gameLoop() {
     if (!gameRunning) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    document.body.style.backgroundPositionY = bgY + "px";
 
-    // Логика эффектов
     if (butterTimer > 0) {
         butterTimer--;
         if (butterTimer <= 0) timeScale = 1.0;
@@ -400,102 +473,98 @@ function gameLoop() {
         if (soundgoodizerTimer <= 0) soundgoodizerActive = false;
     }
 
-    // Мамаша
     frames++;
     if (frames % 60 === 0 && Math.random() < 1/CONFIG.momAttackChance) {
         triggerMomAttack();
     }
 
-    // --- Игрок ---
     let targetX = inputX - player.width / 2;
-    // Мягкое ограничение краев
     if (targetX < -10) targetX = -10;
     if (targetX > canvas.width - player.width + 10) targetX = canvas.width - player.width + 10;
-    
     player.x += (targetX - player.x) * CONFIG.moveSmoothing;
     
-    // Физика
     player.vy += CONFIG.gravity * timeScale;
     player.y += player.vy * timeScale;
 
-    // Скролл мира
-    let targetY = canvas.height * 0.45; // Чуть ниже середины держим
+    let targetY = canvas.height * 0.45;
     if (player.y < targetY) {
         let diff = targetY - player.y;
         player.y = targetY;
         score += Math.floor(diff);
         
+        bgY += diff * 0.2;
+        
         platforms.forEach(p => p.y += diff);
         bonuses.forEach(b => b.y += diff);
-        particles.forEach(p => p.y += diff);
         hazards.forEach(h => h.y += diff);
-        
-        highestPlatformY += diff; // Сдвигаем точку спауна
+        highestPlatformY += diff;
     }
 
-    // Платформы
     for (let i = 0; i < platforms.length; i++) {
         let p = platforms[i];
         
+        if (p.bounce > 0) p.bounce *= 0.8;
+        if (p.bounce < 0.5) p.bounce = 0;
+
         if (p.type === 'moving') {
             p.x += p.vx * timeScale;
             if (p.x <= 0 || p.x + CONFIG.platformWidth >= canvas.width) p.vx *= -1;
         }
 
-        // Рендер
+        let drawY = p.y + p.bounce;
+
         if (!p.broken) {
             ctx.fillStyle = getPlatformColor(p.type);
-            ctx.fillRect(p.x, p.y, CONFIG.platformWidth, CONFIG.platformHeight);
+            ctx.fillRect(p.x, drawY, CONFIG.platformWidth, CONFIG.platformHeight);
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 2;
-            ctx.strokeRect(p.x, p.y, CONFIG.platformWidth, CONFIG.platformHeight);
+            ctx.strokeRect(p.x, drawY, CONFIG.platformWidth, CONFIG.platformHeight);
         } else {
              ctx.fillStyle = '#ddd';
-             ctx.fillRect(p.x, p.y + 10, CONFIG.platformWidth, CONFIG.platformHeight);
+             ctx.fillRect(p.x, drawY + 10, CONFIG.platformWidth, CONFIG.platformHeight);
         }
 
-        // Коллизия
         if (player.vy > 0 && !p.broken &&
-            player.x + player.width > p.x + 5 && // Чуть уже хитбокс для честности
+            player.x + player.width > p.x + 5 &&
             player.x < p.x + CONFIG.platformWidth - 5 &&
             player.y + player.height > p.y &&
             player.y + player.height < p.y + CONFIG.platformHeight + 15
            ) {
             player.vy = CONFIG.jumpForce;
-            if (p.type === 'white') p.broken = true;
+            p.bounce = 10; 
+            
+            playSound('jump');
+            
+            if (p.type === 'white') {
+                p.broken = true;
+                playSound('break');
+            }
         }
 
-        // Ресайкл
         if (p.y > canvas.height) {
             platforms.splice(i, 1);
             i--;
         }
     }
     
-    // Доспаун
-    // Если верхняя платформа уехала ниже -100, создаем новую
-    if (highestPlatformY > -100) {
-        spawnNextPlatform();
-    }
-    
-    // Багфикс: если платформ совсем нет (упали все белые?)
-    if (platforms.length < 3) {
-        let y = highestPlatformY; 
-        if (platforms.length > 0) {
-            y = Math.min(...platforms.map(pl => pl.y));
-            highestPlatformY = y;
-        } 
-        spawnNextPlatform();
-    }
+    if (highestPlatformY > -100) spawnNextPlatform();
+    if (platforms.length < 3) spawnNextPlatform();
 
-    // Бонусы
     for (let i = 0; i < bonuses.length; i++) {
         let b = bonuses[i];
+        let bonusDrawY = b.y;
+        if (b.platform) bonusDrawY += b.platform.bounce; 
         if (b.platform && b.platform.broken) b.y += 3 * timeScale;
 
         ctx.font = "25px Arial";
-        let icon = b.type === 'butter' ? "🧈" : b.type === 'clap' ? "👏" : b.type === 'sound' ? "🎛️" : "🚀";
-        ctx.fillText(icon, b.x, b.y);
+        let icon = "❓";
+        if (b.type === 'butter') icon = "🧈";
+        else if (b.type === 'clap') icon = "👏";
+        else if (b.type === 'sound') icon = "🎛️";
+        else if (b.type === 'bass') icon = "⏫";
+        else if (b.type === 'ott') icon = "🚀";  
+
+        ctx.fillText(icon, b.x, bonusDrawY);
 
         if (player.x < b.x + 30 && player.x + player.width > b.x &&
             player.y < b.y + 30 && player.y + player.height > b.y) {
@@ -506,7 +575,6 @@ function gameLoop() {
         if (b.y > canvas.height) { bonuses.splice(i, 1); i--; }
     }
 
-    // Мамаша
     for (let i = 0; i < hazards.length; i++) {
         let h = hazards[i];
         h.y += CONFIG.momProjectileSpeed * timeScale;
@@ -525,30 +593,33 @@ function gameLoop() {
         if (h.y > canvas.height) { hazards.splice(i, 1); i--; }
     }
 
-    // Игрок
     ctx.font = "40px Arial";
     ctx.fillText(CONFIG.playerEmoji, player.x, player.y + 35);
     if (player.vy < CONFIG.jumpForce * 1.5) ctx.fillText("🔥", player.x + 5, player.y + 55);
 
-    // Партиклы
     for (let i = 0; i < particles.length; i++) {
         let p = particles[i];
-        p.y -= 1 * timeScale;
+        p.y -= 0.5; 
         p.life--;
-        ctx.globalAlpha = Math.max(0, p.life / 60);
+        
+        ctx.globalAlpha = Math.max(0, p.life / 90);
         ctx.fillStyle = "black";
-        ctx.font = "20px Impact";
+        ctx.textAlign = "center";
+        
+        ctx.font = "24px Impact";
         ctx.fillText(p.text, p.x, p.y);
+        
         if (p.subText) {
-            ctx.font = "14px Impact";
-            ctx.fillText(p.subText, p.x, p.y + 15);
+            ctx.font = "16px Impact";
+            ctx.fillText(p.subText, p.x, p.y + 20);
         }
+        
+        ctx.textAlign = "start"; 
         ctx.globalAlpha = 1.0;
         if (p.life <= 0) { particles.splice(i, 1); i--; }
     }
 
     if (player.y > canvas.height) gameOver('fall');
-    
     updateUI();
     requestAnimationFrame(gameLoop);
 }
@@ -562,26 +633,44 @@ function getPlatformColor(type) {
 function activateBonus(type) {
     let text = "";
     let sub = "";
+    
+    let px = canvas.width / 2;
+    let py = canvas.height / 3;
+
     if (type === 'butter') {
-        text = CONFIG.texts.butter;
+        text = "Мафло";
+        sub = rndArr(CONFIG.texts.butterSub);
         timeScale = 0.5;
         butterTimer = 600; 
+        playSound('slow');
     } else if (type === 'clap') {
-        text = CONFIG.texts.clap;
+        text = "Клӭп";
+        sub = rndArr(CONFIG.texts.clapSub);
         player.clapCharges = 3;
+        playSound('clap');
     } else if (type === 'sound') {
-        text = CONFIG.texts.sound;
+        text = "Саундгудізєр";
+        sub = rndArr(CONFIG.texts.soundSub);
         soundgoodizerActive = true;
-        soundgoodizerTimer = 1800; 
+        soundgoodizerTimer = 1800;
+        playSound('sound');
     } else if (type === 'bass') {
-        text = CONFIG.texts.bass;
-        sub = CONFIG.texts.bassSub;
+        text = "Гофрірованный BASS";
+        sub = rndArr(CONFIG.texts.bassSub);
         player.vy = CONFIG.jetpackForce; 
+        playSound('bass');
+    } else if (type === 'ott') {
+        text = "OTT";
+        sub = rndArr(CONFIG.texts.ottSub);
+        player.vy = CONFIG.ottForce; 
+        playSound('ott');
     }
-    particles.push({x: player.x - 20, y: player.y - 20, text: text, subText: sub, life: 120});
+    
+    particles.push({x: px, y: py, text: text, subText: sub, life: 150});
 }
 
 function triggerMomAttack() {
+    playSound('mom');
     redScreen.style.display = 'block';
     momAlert.style.display = 'block';
     setTimeout(() => {
@@ -593,7 +682,6 @@ function triggerMomAttack() {
     }, 1500);
 }
 
-// Управление
 window.addEventListener('mousemove', e => {
     let rect = canvas.getBoundingClientRect();
     inputX = e.clientX - rect.left;
@@ -608,21 +696,17 @@ window.addEventListener('touchstart', e => {
     inputX = e.touches[0].clientX - rect.left;
 }, {passive: false});
 
-clapBtn.addEventListener('touchstart', (e) => {
-    e.stopPropagation();
+clapBtn.addEventListener('click', doClap);
+clapBtn.addEventListener('touchstart', (e) => { e.stopPropagation(); doClap(); });
+
+function doClap() {
     if (gameRunning && player.clapCharges > 0) {
         player.vy = CONFIG.jumpForce; 
         player.clapCharges--;
+        playSound('jump');
         updateUI();
     }
-});
-clapBtn.addEventListener('click', () => {
-    if (gameRunning && player.clapCharges > 0) {
-        player.vy = CONFIG.jumpForce; 
-        player.clapCharges--;
-        updateUI();
-    }
-});
+}
 
 function updateUI() {
     scoreEl.innerText = score;
@@ -638,11 +722,25 @@ function gameOver(reason) {
     gameRunning = false;
     menuScreen.style.display = 'flex';
     gameOverDiv.style.display = 'block';
+    
+    // Обновляем интро для следующего раза (рандом подзаголовка)
+    titleSub.innerText = rndArr(CONFIG.texts.subtitles);
+    
+    // Кнопка теперь предлагает реванш
+    startBtnEl.innerText = rndArr(CONFIG.texts.btnRetry);
+
     let html = "";
     if (reason === 'fall') {
-        html = `<h2>${CONFIG.texts.deathFallTitle}</h2><p>${CONFIG.texts.deathFallSub}</p>`;
+        playSound('fall');
+        let d = rndArr(CONFIG.texts.deathFall);
+        html = `<h2>${d.t}</h2><p>${d.s}</p>`;
     } else if (reason === 'mom') {
-        html = `<h2>${CONFIG.texts.deathMomTitle}</h2><p>${CONFIG.texts.deathMomSub}</p><p class="serif-font" style="font-size: 28px; margin-top:20px;">${CONFIG.texts.deathMomEpic}</p>`;
+        playSound('win');
+        let d = rndArr(CONFIG.texts.deathMom);
+        html = `<h2>${d.t}</h2><p>${d.s}</p>`;
+        if (d.epic) {
+            html += `<p class="serif-font" style="font-size: 28px; margin-top:20px;">${d.epic}</p>`;
+        }
     }
     gameOverDiv.innerHTML = html;
 }
@@ -652,6 +750,10 @@ function startGame() {
     gameOverDiv.style.display = 'none';
     initGame();
 }
+
+// Изначально кнопка "Вперёд" (статично в HTML), но подзаголовок рандомим
+titleSub.innerText = rndArr(CONFIG.texts.subtitles);
+
 </script>
 </body>
 </html>
