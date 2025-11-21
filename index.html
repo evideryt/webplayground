@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Web Playground</title>
+    
+    <!-- Подключаем нормальные шрифты, чтобы на Андроиде глаза не вытекали -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Comic+Neue:wght@700&family=Courier+Prime:wght@700&display=swap" rel="stylesheet">
+
     <style>
         /* СБРОС И БАЗА */
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -12,7 +18,7 @@
         /* КОНТЕЙНЕР СЛАЙДОВ */
         .slider-container {
             display: flex;
-            width: 300vw; /* 3 слайда */
+            width: 300vw;
             height: 100%;
             transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
             will-change: transform;
@@ -28,7 +34,7 @@
             flex-direction: column;
             position: relative;
             overflow: hidden;
-            perspective: 1000px; /* Для 3D магии */
+            perspective: 1000px;
         }
 
         /* 3D КАРТОЧКА */
@@ -44,53 +50,130 @@
             transform-style: preserve-3d;
             transition: transform 0.3s ease;
             animation: float 6s ease-in-out infinite;
+            position: relative;
+            z-index: 10;
         }
 
-        /* Анимация левитации, чтобы выглядело дорого */
         @keyframes float {
             0%, 100% { transform: translateY(0) rotateX(0) rotateY(0); }
             50% { transform: translateY(-10px) rotateX(2deg) rotateY(2deg); }
         }
 
         /* --- СЛАЙД 1: ИНТРО --- */
-        .slide-1 {
-            background-color: #ffdab9; /* Персиковый, как попка младенца */
-            color: #333;
-        }
+        .slide-1 { background-color: #ffdab9; color: #333; }
         .slide-1 h1 { font-size: 2.5rem; margin-bottom: 10px; transform: translateZ(30px); }
         .slide-1 p { font-size: 1.2rem; margin-bottom: 20px; transform: translateZ(20px); }
         .slide-1 .hint { font-size: 0.8rem; opacity: 0.6; transform: translateZ(10px); }
 
+        /* АВАТАРКА */
+        .avatar-container {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 20px auto;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid #fff;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transform: translateZ(40px);
+            transition: transform 0.2s;
+            background: #eee; /* Чтобы эмодзи было видно на фоне */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .avatar-container:hover { transform: translateZ(50px) scale(1.05); }
+        .avatar-img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-fallback { font-size: 50px; display: none; }
+
+        /* МОДАЛКА АВАТАРА */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 15px;
+            max-width: 90%;
+            width: 350px;
+            text-align: center;
+            transform: scale(0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal-overlay.active .modal-content { transform: scale(1); }
+        .modal-img { width: 100%; border-radius: 10px; margin-bottom: 15px; object-fit: cover; max-height: 300px; }
+        .modal-text { font-size: 1.2rem; font-weight: bold; color: #333; }
+
         /* --- СЛАЙД 2: VLONEX --- */
         .slide-2 {
             background-color: #fff;
-            /* Тетрадка в клетку. Классика школьной скамьи */
             background-image: 
                 linear-gradient(#e1e1e1 1px, transparent 1px),
                 linear-gradient(90deg, #e1e1e1 1px, transparent 1px);
             background-size: 20px 20px;
         }
         .vlonex-anim {
-            height: 100px;
+            height: 120px;
             display: flex;
             align-items: flex-end;
             justify-content: center;
             margin: 20px 0;
             transform: translateZ(40px);
+            position: relative;
         }
-        .dancer { font-size: 3rem; animation: jump 0.8s infinite alternate ease-in-out; }
+        .dancer { 
+            font-size: 3rem; 
+            position: relative;
+            /* Анимация прыжка теперь ручная */
+            animation: gravityJump 0.9s infinite; 
+        }
+
+        /* ТВОЯ ФИЗИКА, НЬЮТОН */
+        @keyframes gravityJump {
+            0% { 
+                transform: translateY(0) scale(1.2, 0.8); /* Сплющило */
+                animation-timing-function: cubic-bezier(0, 0, 0.2, 1); /* Резкий старт вверх */
+            }
+            45% { 
+                transform: translateY(-70px) scale(1, 1); /* Пик высоты */
+                animation-timing-function: cubic-bezier(0.8, 0, 1, 1); /* Зависание */
+            }
+            55% {
+                transform: translateY(-70px) scale(1, 1); /* Чуть повисим */
+                animation-timing-function: cubic-bezier(0.8, 0, 1, 1); /* Начало падения (медленно) */
+            }
+            100% { 
+                transform: translateY(0) scale(1.2, 0.8); /* Удар */
+                animation-timing-function: cubic-bezier(0, 0, 0.2, 1); /* Ускорение вниз */
+            }
+        }
+
         .platform {
             width: 60px; height: 10px; background: #0f0; 
             border: 2px solid #000; border-radius: 5px; 
             margin-top: -5px; z-index: -1;
+            animation: platBounce 0.9s infinite;
         }
-        @keyframes jump {
-            0% { transform: translateY(0) scale(1.1, 0.9); }
-            100% { transform: translateY(-40px) scale(0.9, 1.1); }
+        @keyframes platBounce {
+            0%, 100% { transform: translateY(3px); } /* Платформа тоже пружинит от удара */
+            10%, 90% { transform: translateY(0); }
         }
+
+        .font-impact { font-family: 'Anton', sans-serif; letter-spacing: 1px; }
+        .font-comic { font-family: 'Comic Neue', cursive; font-weight: 700; }
+
         .btn-vlonex {
             background: #0f0; color: #000;
-            font-family: 'Impact', sans-serif; letter-spacing: 1px;
             font-size: 1.5rem; padding: 10px 30px;
             border: 3px solid #000; cursor: pointer; text-decoration: none;
             display: inline-block; text-transform: uppercase;
@@ -100,8 +183,7 @@
         .btn-vlonex:active { transform: translateZ(40px) scale(0.95); }
 
         /* --- СЛАЙД 3: VECTOR SPACE --- */
-        .slide-3 { background: #000; color: #fff; position: relative; }
-        /* Звезды. Много CSS боли ради "размытия" */
+        .slide-3 { background: #000; color: #fff; }
         .stars {
             position: absolute; width: 100%; height: 100%; top: 0; left: 0;
             background: radial-gradient(ellipse at center, rgba(27,39,53,0) 0%, #090a0f 100%);
@@ -110,15 +192,12 @@
         .star-layer {
             position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
             background: transparent;
-            box-shadow: 
-                -200px -100px #fff, 200px 100px #fff, -150px 200px #fff, 
-                150px -250px #fff, 0px -300px #fff, -300px 50px #fff;
+            box-shadow: -200px -100px #fff, 200px 100px #fff, -150px 200px #fff, 150px -250px #fff, 0px -300px #fff, -300px 50px #fff;
             animation: warp 2s linear infinite;
             opacity: 0;
         }
         .star-layer:nth-child(2) { animation-delay: 0.6s; transform: scale(0.5); }
         .star-layer:nth-child(3) { animation-delay: 1.2s; transform: scale(0.8); }
-
         @keyframes warp {
             0% { transform: scale(0.1); opacity: 0; }
             10% { opacity: 1; }
@@ -126,8 +205,7 @@
         }
         
         .triangle-ship {
-            font-size: 4rem; color: #fff;
-            text-shadow: 0 0 10px cyan;
+            font-size: 4rem; color: #fff; text-shadow: 0 0 10px cyan;
             animation: fly 3s ease-in-out infinite;
             display: block; margin-bottom: 10px;
         }
@@ -135,37 +213,40 @@
             0%, 100% { transform: translateY(0) rotate(0deg); }
             50% { transform: translateY(10px) rotate(5deg); }
         }
+        .font-courier { font-family: 'Courier Prime', monospace; }
+        
         .btn-space {
             background: #000; color: #fff;
-            font-family: 'Courier New', Courier, monospace; font-weight: bold;
-            padding: 15px 20px; border: 2px solid #fff;
-            text-decoration: none; display: inline-block;
-            margin-top: 15px;
+            font-weight: bold; padding: 15px 20px; border: 2px solid #fff;
+            text-decoration: none; display: inline-block; margin-top: 15px;
             box-shadow: 0 0 10px rgba(255,255,255,0.5);
         }
 
-        /* НАВИГАЦИЯ (СТРЕЛКИ) */
+        /* НАВИГАЦИЯ */
         .nav-btn {
             position: fixed; top: 50%; transform: translateY(-50%);
             font-size: 3rem; color: rgba(0,0,0,0.2); cursor: pointer;
-            z-index: 100; display: none; /* Скрыты на мобилках */
-            padding: 20px; transition: color 0.3s;
+            z-index: 100; display: none; padding: 20px; transition: color 0.3s;
         }
         .nav-btn:hover { color: rgba(0,0,0,0.8); }
         .nav-left { left: 10px; }
         .nav-right { right: 10px; }
-
-        /* Показываем стрелки только если экран горизонтальный */
-        @media (orientation: landscape) {
-            .nav-btn { display: block; }
-        }
-        /* Адаптация цветов стрелок для темного слайда */
+        @media (orientation: landscape) { .nav-btn { display: block; } }
         body[data-slide="2"] .nav-btn { color: rgba(255,255,255,0.3); }
         body[data-slide="2"] .nav-btn:hover { color: rgba(255,255,255,0.9); }
 
     </style>
 </head>
 <body data-slide="0">
+
+    <!-- МОДАЛКА -->
+    <div class="modal-overlay" id="avatarModal" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <!-- Сюда тоже клонируем картинку JS-ом или просто хардкодим -->
+            <img src="avatar.jpg" class="modal-img" id="modalImgRef" onerror="this.src=''; this.style.display='none'; this.parentElement.innerHTML='<div style=\'font-size:80px\'>🤓</div><p class=\'modal-text\'>Да, это я. С кофе из Пятёрочки.</p>'">
+            <p class="modal-text">Да, это я. С кофе из Пятёрочки.</p>
+        </div>
+    </div>
 
     <!-- СТРЕЛКИ -->
     <div class="nav-btn nav-left" onclick="move(-1)">&#10094;</div>
@@ -176,24 +257,30 @@
         <!-- СЛАЙД 1 -->
         <section class="slide slide-1">
             <div class="card">
+                <div class="avatar-container" onclick="openModal()">
+                    <!-- Если картинки нет, сработает onerror и покажет эмодзи -->
+                    <img src="avatar.jpg" class="avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                    <div class="avatar-fallback">🤓</div>
+                </div>
+
                 <h1>Привет!</h1>
                 <p>Здесь ты можешь познакомиться со всякими веб-прикольчиками, которые лежат у меня на гитхабе.</p>
-                <p class="hint">Листай свайпами, стрелками или WASD (если ты киберспортсмен)</p>
+                <p class="hint">Листай свайпами, стрелками или WASD</p>
             </div>
         </section>
 
         <!-- СЛАЙД 2 -->
         <section class="slide slide-2">
             <div class="card" style="border: 2px solid #333;">
-                <h2 style="font-family: 'Impact', sans-serif; letter-spacing: 1px;">Vlonex Jump</h2>
+                <h2 class="font-impact">Vlonex Jump</h2>
                 <div class="vlonex-anim">
                     <div class="dancer">🕺</div>
                 </div>
                 <div class="platform" style="margin: 0 auto 20px auto;"></div>
-                <p style="font-family: 'Comic Sans MS', cursive; font-size: 0.9rem; margin-bottom: 15px;">
+                <p class="font-comic" style="font-size: 1.1rem; margin-bottom: 15px; line-height: 1.4;">
                     Lima Sky украли у меня эту идею! Управляй Влонексом и постарайся не упасть.
                 </p>
-                <a href="https://evideryt.github.io/webplayground/VlonexJump.html" class="btn-vlonex">ПОГНАЛИ</a>
+                <a href="https://evideryt.github.io/webplayground/VlonexJump.html" class="btn-vlonex font-impact">ПОГНАЛИ</a>
             </div>
         </section>
 
@@ -206,11 +293,11 @@
             </div>
             <div class="card" style="background: rgba(0,0,0,0.7); border: 1px solid #fff; color: #fff;">
                 <div class="triangle-ship">∆</div>
-                <h2 style="font-family: 'Courier New', monospace;">VectorSpace</h2>
-                <p style="font-size: 0.9rem; margin: 10px 0; font-family: 'Courier New', monospace;">
+                <h2 class="font-courier">VectorSpace</h2>
+                <p class="font-courier" style="font-size: 0.9rem; margin: 10px 0; line-height: 1.5;">
                     Сжатый до предела десятиминутный рогалик. Путешествуй по космосу на треугольнике и отбивайся от пиратов.
                 </p>
-                <a href="https://evideryt.github.io/webplayground/VectorSpace.html" class="btn-space">В ПУТЬ</a>
+                <a href="https://evideryt.github.io/webplayground/VectorSpace.html" class="btn-space font-courier">В ПУТЬ</a>
             </div>
         </section>
 
@@ -222,10 +309,10 @@
         const slider = document.getElementById('slider');
         const body = document.body;
 
-        // Функция переключения
+        // Навигация
         function updateSlider() {
             slider.style.transform = `translateX(-${currentSlide * 100}vw)`;
-            body.setAttribute('data-slide', currentSlide); // Для смены цвета стрелок
+            body.setAttribute('data-slide', currentSlide);
         }
 
         function move(dir) {
@@ -235,48 +322,49 @@
             updateSlider();
         }
 
-        // --- КЛАВИАТУРА (WASD + Стрелки) ---
+        // Клавиатура
         document.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
             if (key === 'arrowright' || key === 'd') move(1);
             if (key === 'arrowleft' || key === 'a') move(-1);
+            if (key === 'escape') closeModal();
         });
 
-        // --- СВАЙПЫ (TOUCH) ---
+        // Свайпы
         let touchStartX = 0;
         let touchEndX = 0;
 
-        document.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-        });
-
+        document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; });
         document.addEventListener('touchend', e => {
             touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
+            if (touchEndX < touchStartX - 50) move(1);
+            if (touchEndX > touchStartX + 50) move(-1);
         });
 
-        function handleSwipe() {
-            if (touchEndX < touchStartX - 50) move(1); // Свайп влево (след. слайд)
-            if (touchEndX > touchStartX + 50) move(-1); // Свайп вправо (пред. слайд)
-        }
-
-        // --- 3D ЭФФЕКТ ДЛЯ КАРТОЧЕК (при движении мыши) ---
-        // Это чтобы прям вообще "дорого-богато" было на компе
+        // 3D Mouse Effect
         document.querySelectorAll('.slide').forEach(slide => {
             slide.addEventListener('mousemove', (e) => {
+                // Не крутим если модалка открыта, а то укачает
+                if(document.getElementById('avatarModal').classList.contains('active')) return;
+
                 const card = slide.querySelector('.card');
                 const xAxis = (window.innerWidth / 2 - e.pageX) / 25;
                 const yAxis = (window.innerHeight / 2 - e.pageY) / 25;
                 card.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
             });
-            
-            // Сброс при уходе мыши
-            slide.addEventListener('mouseleave', (e) => {
+            slide.addEventListener('mouseleave', () => {
                 const card = slide.querySelector('.card');
                 card.style.transform = `rotateY(0deg) rotateX(0deg)`;
             });
         });
 
+        // Модалка
+        function openModal() {
+            document.getElementById('avatarModal').classList.add('active');
+        }
+        function closeModal() {
+            document.getElementById('avatarModal').classList.remove('active');
+        }
     </script>
 </body>
 </html>
