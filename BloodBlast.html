@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEURO-DECAY: DOPAMINE OVERDOSE</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050000;
+            overflow: hidden;
+            touch-action: none;
+            font-family: 'Courier New', Courier, monospace;
+            color: #ff0000;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        canvas { display: block; margin: 0 auto; }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 10px; box-sizing: border-box; z-index: 10;
+        }
+        .top-row { display: flex; justify-content: space-between; width: 100%; pointer-events: auto; }
+        .hud-text {
+            text-shadow: 0 0 5px #ff0000, 0 0 10px #8b0000;
+            font-weight: bold; font-size: 20px;
+            background: rgba(0,0,0,0.6); padding: 5px; border-radius: 4px;
+            border: 1px solid #300;
+        }
+        #combo-container { align-self: flex-end; text-align: right; }
+        .buffer-indicator { font-size: 14px; color: #aaa; }
+        
+        #help-btn {
+            width: 40px; height: 40px;
+            border: 2px solid #f00; background: #200; color: #f00;
+            font-size: 24px; font-weight: bold; border-radius: 50%;
+            cursor: pointer; pointer-events: auto;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 10px #f00;
+        }
+        #help-btn:active { background: #f00; color: #000; }
+
+        /* Модалки */
+        .modal {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 0, 0, 0.98);
+            border: 2px solid #ff0000; padding: 20px;
+            text-align: center; display: none; z-index: 20;
+            pointer-events: auto; box-shadow: 0 0 50px #ff0000;
+            max-width: 90%; max-height: 90%; overflow-y: auto;
+        }
+        .lore-text {
+            text-align: left; font-size: 14px; line-height: 1.4;
+            color: #ffaaaa; margin-bottom: 20px;
+            border-left: 3px solid #f00; padding-left: 10px;
+        }
+        h1, h2 { margin: 0 0 10px 0; color: #f00; }
+        
+        /* Кнопки */
+        button.action-btn {
+            background: #300; color: #f00; border: 1px solid #f00;
+            padding: 10px 20px; font-size: 18px; cursor: pointer;
+            margin-top: 10px; font-family: inherit; width: 100%;
+        }
+        button.action-btn:active { background: #f00; color: #000; }
+
+        /* Стиль победы */
+        #victory-modal {
+            border-color: #00ff00;
+            box-shadow: 0 0 50px #00ff00;
+        }
+        #victory-modal h1 { color: #00ff00; }
+        #victory-modal p { color: #ccffcc; }
+        #victory-modal button { border-color: #00ff00; color: #00ff00; background: #002200; }
+        
+        /* Прогресс бары целей */
+        .goal-bar {
+            width: 100%; height: 4px; background: #300; margin-top: 5px;
+            position: relative;
+        }
+        .goal-fill {
+            height: 100%; background: #f00; width: 0%;
+            transition: width 0.3s;
+        }
+        .goal-fill.complete { background: #0f0; box-shadow: 0 0 5px #0f0; }
+
+    </style>
+</head>
+<body>
+
+<div id="ui-layer">
+    <div class="top-row">
+        <div id="help-btn" onclick="togglePause()">?</div>
+        <div class="hud-text">
+            INTEGRITY: <span id="score">0</span> / 10k
+            <div class="goal-bar"><div id="score-bar" class="goal-fill"></div></div>
+        </div>
+    </div>
+    <div id="combo-container" class="hud-text">
+        <div>SYNC RATE: <span id="combo">x1</span> / x10</div>
+        <div class="goal-bar"><div id="combo-bar" class="goal-fill"></div></div>
+        <div class="buffer-indicator">BUFFER: <span id="combo-buffer">0</span> moves</div>
+    </div>
+</div>
+
+<!-- ЛОР -->
+<div id="lore-modal" class="modal">
+    <h2>СУБЪЕКТ: Д-Р В. КОРТЕКС</h2>
+    <div class="lore-text">
+        <p>> ЦЕЛЬ ПРОТОКОЛА: РЕМИССИЯ</p>
+        <p>Для стабилизации нейронной сети необходимо достичь синхронизации <b>x10</b> и восстановить целостность <b>10,000</b> единиц.</p>
+        <p>Нанорой реагирует на звук. Каждое действие резонирует в твоем черепе.</p>
+        <p>Не разочаруй меня. Я ненавижу писать некрологи.</p>
+    </div>
+    <button class="action-btn" onclick="togglePause()">ВЕРНУТЬСЯ К ОПЕРАЦИИ</button>
+</div>
+
+<!-- ГЕЙМ ОВЕР -->
+<div id="game-over" class="modal">
+    <h1>МОЗГ ОТКАЗАЛ</h1>
+    <p>Ты стал овощем. Поздравляю.</p>
+    <p>Final Score: <span id="final-score">0</span></p>
+    <button class="action-btn" onclick="resetGame()">НОВЫЙ НОСИТЕЛЬ</button>
+</div>
+
+<!-- ПОБЕДА -->
+<div id="victory-modal" class="modal">
+    <h1>РЕМИССИЯ ПОДТВЕРЖДЕНА</h1>
+    <p>Прионная активность подавлена.</p>
+    <p>Твой мозг спасен... пока что.</p>
+    <p>Score: <span id="victory-score">0</span></p>
+    <button class="action-btn" onclick="resetGame()">ПОВТОРИТЬ ЭКСПЕРИМЕНТ</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    /**
+     * AUDIO MANAGER CLASS
+     * Для тех, кто понимает, что такое Web Audio API, а не пердит в <audio> теги.
+     */
+    class AudioMan {
+        constructor() {
+            this.ctx = null;
+            this.buffers = {};
+            this.path = './BloodBlastRes/'; // Папочка с твоим барахлом
+            this.files = {
+                'pickup': 'pickup.mp3',
+                'place1': 'place1.mp3',
+                'place2': 'place2.mp3',
+                'clear_single': 'clear_single.mp3',
+                'clear_multi': 'clear_multi.mp3',
+                'combo_up': 'combo_up.mp3',
+                'combo_lost': 'combo_lost.mp3'
+            };
+            this.isMuted = false;
+        }
+
+        init() {
+            if (!this.ctx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.loadAll();
+            } else if (this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+        }
+
+        async loadAll() {
+            for (let [key, file] of Object.entries(this.files)) {
+                try {
+                    const response = await fetch(this.path + file);
+                    const arrayBuffer = await response.arrayBuffer();
+                    this.buffers[key] = await this.ctx.decodeAudioData(arrayBuffer);
+                } catch (e) {
+                    console.error(`Не удалось загрузить звук: ${file}. Ты залил файлы, гений?`, e);
+                }
+            }
+        }
+
+        play(key, detuneCents = 0) {
+            if (!this.ctx || !this.buffers[key] || this.isMuted) return;
+            
+            // Если контекст упал (бывает на мобилах)
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+
+            const source = this.ctx.createBufferSource();
+            source.buffer = this.buffers[key];
+            
+            // Питч-шифтинг
+            if (detuneCents !== 0) {
+                source.detune.value = detuneCents;
+            }
+
+            // Gain (громкость)
+            const gainNode = this.ctx.createGain();
+            gainNode.gain.value = 0.8; // Чуть тише, чтоб уши не отвалились
+
+            source.connect(gainNode);
+            gainNode.connect(this.ctx.destination);
+            
+            // Сброс мусора
+            source.start(0);
+        }
+    }
+
+    const SFX = new AudioMan();
+
+
+    // --- GAME CORE ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const GRID_SIZE = 8;
+    let CELL_SIZE = 0;
+    let BOARD_OFFSET_X = 0;
+    let BOARD_OFFSET_Y = 0;
+    
+    let grid = [];
+    let shapes = [];
+    let particles = [];
+    let bloodStains = [];
+    let score = 0;
+    
+    // Механика победы
+    const WIN_SCORE = 10000;
+    const MAX_COMBO = 10;
+    let comboMultiplier = 1;
+    let comboBuffer = 0;
+
+    let isGameOver = false;
+    let isPaused = false;
+    let isDragging = false;
+    let draggedShapeIndex = -1;
+    
+    let maxTime = 100;
+    let currentTime = 100;
+    let timeDecay = 0.05;
+
+    // Инициализация
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const minDim = Math.min(canvas.width, canvas.height * 0.60); 
+        CELL_SIZE = Math.floor((minDim - 40) / GRID_SIZE);
+        BOARD_OFFSET_X = (canvas.width - GRID_SIZE * CELL_SIZE) / 2;
+        BOARD_OFFSET_Y = 80;
+        updateShapePositions();
+    }
+    
+    window.addEventListener('resize', resize);
+
+    const SHAPE_TEMPLATES = [
+        [[0,0]], [[0,0], [1,0]], [[0,0], [0,1]], 
+        [[0,0], [1,0], [2,0]], [[0,0], [0,1], [0,2]], 
+        [[0,0], [1,0], [0,1], [1,1]], 
+        [[0,0], [1,0], [2,0], [1,1]], 
+        [[0,0], [0,1], [1,1]],
+        [[0,0], [1,0], [2,0], [0,1]]
+    ];
+
+    function createGrid() {
+        grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+    }
+
+    function spawnShapes() {
+        shapes = [];
+        for (let i = 0; i < 3; i++) {
+            const template = SHAPE_TEMPLATES[Math.floor(Math.random() * SHAPE_TEMPLATES.length)];
+            const blocks = template.map(p => ({x: p[0], y: p[1]}));
+            shapes.push({
+                blocks: blocks,
+                x: 0, y: 0, baseX: 0, baseY: 0,
+                color: `rgb(${130 + Math.random()*120}, 0, 0)`,
+                scale: 0.6
+            });
+        }
+        updateShapePositions();
+    }
+
+    function updateShapePositions() {
+        const zoneY = BOARD_OFFSET_Y + GRID_SIZE * CELL_SIZE + 40;
+        const availableWidth = canvas.width;
+        const gap = availableWidth / 3;
+        shapes.forEach((shape, i) => {
+            if (!shape) return;
+            shape.baseX = gap * i + gap/2;
+            shape.baseY = zoneY + 50;
+            if (!isDragging || draggedShapeIndex !== i) {
+                shape.x = shape.baseX;
+                shape.y = shape.baseY;
+            }
+        });
+    }
+
+    function canPlace(shape, gridX, gridY) {
+        for (let b of shape.blocks) {
+            const x = gridX + b.x;
+            const y = gridY + b.y;
+            if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE || grid[y][x] !== 0) return false;
+        }
+        return true;
+    }
+
+    function placeShape(shapeIdx, gridX, gridY) {
+        // Звук постановки
+        const tone = Math.random() > 0.5 ? 'place1' : 'place2';
+        // Рандомный питч при постановке тоже добавит живости
+        const randomCents = [-50, 0, 50][Math.floor(Math.random() * 3)];
+        SFX.play(tone, randomCents);
+
+        const shape = shapes[shapeIdx];
+        for (let b of shape.blocks) {
+            grid[gridY + b.y][gridX + b.x] = 1;
+            spawnParticles((BOARD_OFFSET_X + (gridX + b.x) * CELL_SIZE + CELL_SIZE/2), 
+                           (BOARD_OFFSET_Y + (gridY + b.y) * CELL_SIZE + CELL_SIZE/2), 4, '#800');
+        }
+
+        currentTime = Math.min(maxTime, currentTime + 3 + shape.blocks.length);
+        shapes[shapeIdx] = null;
+
+        checkLines();
+
+        if (shapes.every(s => s === null)) {
+            spawnShapes();
+        } else {
+            checkPossibleMoves();
+        }
+    }
+
+    function checkLines() {
+        let linesCleared = 0;
+        const rowsToClear = [];
+        const colsToClear = [];
+
+        for (let y = 0; y < GRID_SIZE; y++) if (grid[y].every(val => val === 1)) rowsToClear.push(y);
+        for (let x = 0; x < GRID_SIZE; x++) {
+            let colFull = true;
+            for (let y = 0; y < GRID_SIZE; y++) if (grid[y][x] === 0) colFull = false;
+            if (colFull) colsToClear.push(x);
+        }
+
+        linesCleared = rowsToClear.length + colsToClear.length;
+
+        rowsToClear.forEach(y => {
+            grid[y].fill(0);
+            createBloodStain(y, 'row');
+        });
+        colsToClear.forEach(x => {
+            for (let y = 0; y < GRID_SIZE; y++) grid[y][x] = 0;
+            createBloodStain(x, 'col');
+        });
+
+        if (linesCleared > 0) {
+            // ЗВУКИ ВЗРЫВА
+            if (linesCleared >= 2) {
+                 // Тон зависит от количества линий. 3 линии = выше тон.
+                SFX.play('clear_multi', (linesCleared - 2) * 100); 
+            } else {
+                SFX.play('clear_single');
+            }
+
+            if (comboMultiplier < MAX_COMBO) {
+                comboMultiplier++;
+                // ЗВУК КОМБО АП: Тональность растет с комбо
+                SFX.play('combo_up', (comboMultiplier - 1) * 100);
+            } else {
+                // Если уже макс, просто приятный дзынь
+                SFX.play('combo_up', 1000); // Октава вверх
+            }
+
+            comboBuffer = Math.floor(comboMultiplier / 2);
+            score += linesCleared * 100 * comboMultiplier;
+            currentTime = Math.min(maxTime, currentTime + linesCleared * 12);
+            
+            if (navigator.vibrate) navigator.vibrate(linesCleared * 50);
+        } else {
+            if (comboBuffer > 0) {
+                comboBuffer--;
+            } else if (comboMultiplier > 1) {
+                comboMultiplier = 1;
+                comboBuffer = 0;
+                // ЗВУК ПОТЕРИ КОМБО
+                SFX.play('combo_lost', -200);
+            }
+        }
+        
+        checkWinCondition();
+        updateUI();
+    }
+
+    function checkWinCondition() {
+        if (score >= WIN_SCORE && comboMultiplier >= MAX_COMBO) {
+            victory();
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('score').innerText = score;
+        document.getElementById('combo').innerText = "x" + comboMultiplier;
+        document.getElementById('combo-buffer').innerText = comboBuffer;
+        
+        // Прогресс бары
+        const scorePct = Math.min(100, (score / WIN_SCORE) * 100);
+        const comboPct = Math.min(100, (comboMultiplier / MAX_COMBO) * 100);
+        
+        const scoreEl = document.getElementById('score-bar');
+        const comboEl = document.getElementById('combo-bar');
+        
+        scoreEl.style.width = scorePct + '%';
+        comboEl.style.width = comboPct + '%';
+        
+        if (score >= WIN_SCORE) scoreEl.classList.add('complete');
+        else scoreEl.classList.remove('complete');
+        
+        if (comboMultiplier >= MAX_COMBO) comboEl.classList.add('complete');
+        else comboEl.classList.remove('complete');
+        
+        const bufferEl = document.querySelector('.buffer-indicator');
+        bufferEl.style.color = comboBuffer > 0 ? '#0f0' : '#aaa';
+    }
+
+    function checkPossibleMoves() {
+        let canMove = false;
+        const activeShapes = shapes.filter(s => s !== null);
+        if (activeShapes.length === 0) return;
+
+        for (let s of activeShapes) {
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (canPlace(s, x, y)) {
+                        canMove = true;
+                        break;
+                    }
+                }
+                if (canMove) break;
+            }
+            if (canMove) break;
+        }
+
+        if (!canMove) gameOver();
+    }
+
+    // --- VISUALS ---
+
+    function createBloodStain(index, type) {
+        const stain = {
+            x: type === 'col' ? BOARD_OFFSET_X + index * CELL_SIZE + CELL_SIZE/2 : BOARD_OFFSET_X + Math.random() * (GRID_SIZE * CELL_SIZE),
+            y: type === 'row' ? BOARD_OFFSET_Y + index * CELL_SIZE + CELL_SIZE/2 : BOARD_OFFSET_Y + Math.random() * (GRID_SIZE * CELL_SIZE),
+            r: 20 + Math.random() * 40,
+            alpha: 0.8,
+            splatter: []
+        };
+        for(let i=0; i<8; i++) {
+            stain.splatter.push({
+                dx: (Math.random() - 0.5) * 80,
+                dy: (Math.random() - 0.5) * 80,
+                r: 2 + Math.random() * 6
+            });
+        }
+        bloodStains.push(stain);
+        if (bloodStains.length > 12) bloodStains.shift();
+    }
+
+    function spawnParticles(x, y, count, color) {
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x: x, y: y,
+                vx: (Math.random() - 0.5) * 12,
+                vy: (Math.random() - 0.5) * 12,
+                life: 1.0, color: color
+            });
+        }
+    }
+
+    function drawSyringe() {
+        const h = canvas.height * 0.35;
+        const w = 30;
+        const x = 15;
+        const y = (canvas.height - h) / 2;
+
+        ctx.strokeStyle = '#666'; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
+        const fillPercent = currentTime / maxTime;
+        const fillHeight = h * fillPercent;
+        ctx.fillStyle = fillPercent > 0.3 ? `rgba(180, 0, 0, 0.8)` : `rgba(255, 0, 0, ${0.5 + Math.random()*0.5})`;
+        ctx.fillRect(x + 2, y + h - fillHeight, w - 4, fillHeight);
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 5; i++) ctx.fillRect(x, y + i * (h/4), 8, 2);
+        
+        ctx.save();
+        ctx.translate(x - 5, y + h/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.fillStyle = '#600';
+        ctx.font = '10px Courier';
+        ctx.fillText("ANTIDOTE", -25, 0);
+        ctx.restore();
+    }
+
+    function draw() {
+        ctx.fillStyle = '#050000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        bloodStains.forEach(stain => {
+            ctx.fillStyle = `rgba(100, 0, 0, ${stain.alpha})`;
+            ctx.beginPath(); ctx.arc(stain.x, stain.y, stain.r, 0, Math.PI*2); ctx.fill();
+            stain.splatter.forEach(s => {
+                ctx.beginPath(); ctx.arc(stain.x + s.dx, stain.y + s.dy, s.r, 0, Math.PI*2); ctx.fill();
+            });
+            if(!isPaused && !isGameOver) stain.alpha -= 0.0005;
+        });
+        bloodStains = bloodStains.filter(s => s.alpha > 0);
+
+        ctx.strokeStyle = '#220000'; ctx.lineWidth = 2;
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const px = BOARD_OFFSET_X + x * CELL_SIZE;
+                const py = BOARD_OFFSET_Y + y * CELL_SIZE;
+                ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+                if (grid[y][x] === 1) {
+                    ctx.fillStyle = '#900';
+                    ctx.fillRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+                    ctx.fillStyle = '#d00';
+                    ctx.fillRect(px + CELL_SIZE/4, py + CELL_SIZE/4, CELL_SIZE/2, CELL_SIZE/2);
+                }
+            }
+        }
+
+        drawSyringe();
+
+        shapes.forEach((shape, i) => {
+            if (!shape) return;
+            const isActive = (isDragging && draggedShapeIndex === i);
+            const scale = isActive ? 1 : shape.scale;
+            const size = CELL_SIZE * scale;
+            
+            if (isActive) {
+                const gridX = Math.round((shape.x - BOARD_OFFSET_X) / CELL_SIZE);
+                const gridY = Math.round((shape.y - BOARD_OFFSET_Y - size/2) / CELL_SIZE);
+                if (canPlace(shape, gridX, gridY)) {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                    shape.blocks.forEach(b => {
+                        const px = BOARD_OFFSET_X + (gridX + b.x) * CELL_SIZE;
+                        const py = BOARD_OFFSET_Y + (gridY + b.y) * CELL_SIZE;
+                        ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+                    });
+                }
+            }
+
+            ctx.fillStyle = shape.color;
+            shape.blocks.forEach(b => {
+                const px = shape.x + b.x * size - (isActive ? 0 : (size * 1.5)); 
+                const py = shape.y + b.y * size - (isActive ? size * 2.5 : (size * 1.5));
+                ctx.fillRect(px, py, size, size);
+                ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(px, py, size, size);
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(px+2, py+2, size-4, 2); ctx.fillRect(px+2, py+2, 2, size-4);
+                ctx.fillStyle = shape.color;
+            });
+        });
+
+        particles.forEach(p => {
+            ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 2 + Math.random()*2, 0, Math.PI*2); ctx.fill();
+            if (!isPaused && !isGameOver) {
+                p.x += p.vx; p.y += p.vy; p.vy += 0.4; p.life -= 0.03;
+            }
+            ctx.globalAlpha = 1;
+        });
+        particles = particles.filter(p => p.life > 0);
+    }
+
+    function loop() {
+        if (!isGameOver) {
+            if (!isPaused) {
+                currentTime -= timeDecay;
+                if (currentTime <= 0) gameOver();
+            }
+            draw();
+            requestAnimationFrame(loop);
+        }
+    }
+
+    // --- SYSTEM ---
+
+    function togglePause() {
+        // Инициализация звука при первом клике юзера
+        SFX.init();
+        
+        const modal = document.getElementById('lore-modal');
+        if (isPaused) { isPaused = false; modal.style.display = 'none'; }
+        else { isPaused = true; modal.style.display = 'block'; }
+    }
+
+    function gameOver() {
+        isGameOver = true;
+        document.getElementById('final-score').innerText = score;
+        document.getElementById('game-over').style.display = 'block';
+    }
+
+    function victory() {
+        isGameOver = true;
+        document.getElementById('victory-score').innerText = score;
+        document.getElementById('victory-modal').style.display = 'block';
+        // Звук победы? Ну давай просто комбо ап пару раз сыграем
+        SFX.play('combo_up', 0);
+        setTimeout(() => SFX.play('combo_up', 500), 200);
+        setTimeout(() => SFX.play('combo_up', 1200), 400);
+    }
+
+    function resetGame() {
+        createGrid(); spawnShapes();
+        score = 0; comboMultiplier = 1; comboBuffer = 0; currentTime = 100;
+        particles = []; bloodStains = [];
+        isGameOver = false; isPaused = false;
+        document.getElementById('game-over').style.display = 'none';
+        document.getElementById('victory-modal').style.display = 'none';
+        updateUI(); loop();
+    }
+
+    // --- INPUT ---
+    function getTouchPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const t = e.touches ? e.touches[0] : e;
+        return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    }
+
+    function handleStart(e) {
+        if (isGameOver || isPaused) return;
+        
+        // ВАЖНО: Активация аудио контекста
+        SFX.init();
+
+        const pos = getTouchPos(e);
+        if (pos.y < 50 && pos.x < 50) return;
+
+        shapes.forEach((shape, i) => {
+            if (!shape) return;
+            const dx = pos.x - shape.baseX;
+            const dy = pos.y - shape.baseY;
+            if (Math.sqrt(dx*dx + dy*dy) < 70) {
+                isDragging = true;
+                draggedShapeIndex = i;
+                shape.x = pos.x;
+                shape.y = pos.y;
+                
+                // ЗВУК ВЗЯТИЯ: Рандомные дискретные интервалы (центы)
+                const steps = [0, 20, 50, 100, -20, -50, -100];
+                const cents = steps[Math.floor(Math.random() * steps.length)];
+                SFX.play('pickup', cents);
+            }
+        });
+    }
+
+    function handleMove(e) {
+        if (!isDragging || isPaused) return;
+        e.preventDefault();
+        const pos = getTouchPos(e);
+        shapes[draggedShapeIndex].x = pos.x;
+        shapes[draggedShapeIndex].y = pos.y;
+    }
+
+    function handleEnd(e) {
+        if (!isDragging) return;
+        const shape = shapes[draggedShapeIndex];
+        const gridX = Math.round((shape.x - BOARD_OFFSET_X) / CELL_SIZE);
+        const gridY = Math.round((shape.y - BOARD_OFFSET_Y - CELL_SIZE*2.5) / CELL_SIZE);
+
+        if (canPlace(shape, gridX, gridY)) {
+            placeShape(draggedShapeIndex, gridX, gridY);
+        } else {
+             // Возврат на базу (можно добавить звук 'whoosh')
+        }
+
+        isDragging = false; draggedShapeIndex = -1; updateShapePositions();
+    }
+
+    canvas.addEventListener('mousedown', handleStart);
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseup', handleEnd);
+    canvas.addEventListener('touchstart', handleStart, {passive: false});
+    canvas.addEventListener('touchmove', handleMove, {passive: false});
+    canvas.addEventListener('touchend', handleEnd);
+
+    // Boot
+    resize(); createGrid(); spawnShapes(); updateUI(); loop();
+
+</script>
+</body>
+</html>
