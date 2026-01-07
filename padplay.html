@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Симулятор Китката 303</title>
+    <title>Симулятор Китката 303 (140 BPM)</title>
     <style>
         :root {
-            --bg: #1e1e1e;
-            --pad-off: #3a3a3a;
-            --accent: #00ffcc;
+            --bg: #111;
+            --pad-off: #333;
             --text: #ddd;
             --error: #ff4d4d;
         }
@@ -21,91 +20,86 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: space-evenly;
+            justify-content: center;
             height: 100vh;
             overflow: hidden;
             touch-action: none;
         }
 
         h1 {
-            font-size: 1rem;
-            margin: 0;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            opacity: 0.7;
-            position: absolute;
-            top: 20px;
+            letter-spacing: 2px;
+            color: #666;
         }
 
-        /* --- РАДАР --- */
-        .radar-container {
-            position: relative;
-            width: 140px;
-            height: 140px;
-            border-radius: 50%;
-            border: 2px solid #555;
-            background: #252525;
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-top: 30px;
-        }
-
-        .radar-sweeper {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            width: 50%;
-            height: 50%;
-            transform-origin: 0% 100%;
-            background: linear-gradient(90deg, transparent 95%, var(--accent) 100%);
-            opacity: 0.6;
-            pointer-events: none;
-            will-change: transform;
-        }
-
-        .radar-dot {
-            width: 10px;
-            height: 10px;
-            background-color: var(--accent);
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--accent);
-        }
-
-        /* --- ПЭДЫ --- */
+        /* --- СЕТКА ПЭДОВ --- */
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
-            gap: 15px;
-            width: 85vw;
-            max-width: 350px;
+            gap: 20px;
+            width: 90vw;
+            max-width: 360px;
             aspect-ratio: 1 / 1;
         }
 
         .pad {
             background-color: var(--pad-off);
-            border-radius: 12px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 2rem;
+            font-size: 2.5rem;
+            color: #555;
             cursor: pointer;
             position: relative;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-            transition: background-color 0.1s;
+            box-shadow: 0 6px 0 #1a1a1a;
+            transition: transform 0.1s, box-shadow 0.1s;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
+            overflow: hidden; /* Чтобы вайпер не вылезал за края */
         }
 
-        .pad.active[data-idx="0"] { background-color: #ff4d4d; color: #000; box-shadow: 0 0 15px #ff4d4d; }
-        .pad.active[data-idx="1"] { background-color: #ffff4d; color: #000; box-shadow: 0 0 15px #ffff4d; }
-        .pad.active[data-idx="2"] { background-color: #4dff88; color: #000; box-shadow: 0 0 15px #4dff88; }
-        .pad.active[data-idx="3"] { background-color: #4dffff; color: #000; box-shadow: 0 0 15px #4dffff; }
+        .pad:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #1a1a1a;
+        }
 
-        .pad:active { transform: scale(0.98); }
+        /* --- ВАЙПЕР (РАДАР ВНУТРИ) --- */
+        .wiper {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            pointer-events: none;
+            opacity: 0;
+            /* Градиентный след ("хвост" радара) */
+            background: conic-gradient(
+                from 0deg, 
+                transparent 0%, 
+                rgba(255, 255, 255, 0.05) 50%, 
+                rgba(255, 255, 255, 0.4) 100%
+            );
+            transition: opacity 0.2s;
+            will-change: transform;
+        }
+
+        /* Цвета активных пэдов */
+        .pad.active { color: #000; box-shadow: 0 6px 0 rgba(0,0,0,0.3); }
+        
+        .pad.active[data-idx="0"] { background-color: #ff5e5e; } /* Красный */
+        .pad.active[data-idx="1"] { background-color: #ffe600; } /* Желтый */
+        .pad.active[data-idx="2"] { background-color: #00ff88; } /* Зеленый */
+        .pad.active[data-idx="3"] { background-color: #00ccff; } /* Голубой */
+
+        /* Когда пэд активен, показываем вайпер */
+        .pad.active .wiper {
+            opacity: 1;
+        }
 
         /* --- OVERLAY --- */
         #overlay {
@@ -118,155 +112,134 @@
             justify-content: center;
             z-index: 100;
             transition: opacity 0.5s;
-            padding: 20px;
             text-align: center;
         }
 
-        #status-text {
-            color: var(--accent);
-            margin-bottom: 20px;
-            font-size: 1rem;
-            font-family: monospace;
-        }
-        
-        #error-details {
-            color: var(--error);
-            font-size: 0.8rem;
-            margin-top: 10px;
-            max-width: 80%;
-        }
+        #status-text { color: #00ff88; margin-bottom: 20px; font-family: monospace; }
+        #error-details { color: var(--error); font-size: 0.8rem; margin-top: 10px; }
 
         #start-btn {
-            padding: 20px 50px;
-            font-size: 1.2rem;
-            background: transparent;
-            border: 2px solid var(--accent);
-            color: var(--accent);
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            background: #333;
+            border: 2px solid #555;
+            color: #777;
             border-radius: 50px;
             cursor: pointer;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            opacity: 0.3;
+            font-weight: bold;
             pointer-events: none;
             transition: all 0.3s;
         }
 
         #start-btn.ready {
-            opacity: 1;
-            pointer-events: auto;
-            background: var(--accent);
+            background: #00ff88;
+            border-color: #00ff88;
             color: #000;
-            font-weight: bold;
-            box-shadow: 0 0 20px var(--accent);
+            pointer-events: auto;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.4);
         }
 
-        .footer { font-size: 0.7rem; color: #555; position: absolute; bottom: 10px; }
+        .footer { font-size: 0.7rem; color: #444; position: absolute; bottom: 15px; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h1>Симулятор Китката 303</h1>
-        <p id="status-text">Инициализация...</p>
-        <button id="start-btn">TAP TO START</button>
+        <h1 style="color:white; margin-bottom:10px;">KitKat 140 BPM</h1>
+        <p id="status-text">Греем лампы...</p>
+        <button id="start-btn">START</button>
         <div id="error-details"></div>
     </div>
 
     <h1>KitKat 303</h1>
 
-    <div class="radar-container">
-        <div class="radar-dot"></div>
-        <div class="radar-sweeper" id="sweeper"></div>
-    </div>
-
     <div class="grid">
-        <div class="pad" data-idx="0">1</div>
-        <div class="pad" data-idx="1">2</div>
-        <div class="pad" data-idx="2">3</div>
-        <div class="pad" data-idx="3">4</div>
+        <div class="pad" data-idx="0">
+            <span>1</span>
+            <div class="wiper"></div>
+        </div>
+        <div class="pad" data-idx="1">
+            <span>2</span>
+            <div class="wiper"></div>
+        </div>
+        <div class="pad" data-idx="2">
+            <span>3</span>
+            <div class="wiper"></div>
+        </div>
+        <div class="pad" data-idx="3">
+            <span>4</span>
+            <div class="wiper"></div>
+        </div>
     </div>
 
     <div class="footer">evider.github.io</div>
 
     <script>
-        // ИМЕНА ФАЙЛОВ (Убедись, что на GitHub они называются точно так же)
+        // --- НАСТРОЙКИ РИТМА ---
+        const BPM = 140;
+        const BARS_COUNT = 2; // Сколько тактов в лупе (стандартно 2 или 4)
+        
+        // Математика длительности (60 сек / BPM * 4 удара * кол-во тактов)
+        const LOOP_DURATION = (60 / BPM) * 4 * BARS_COUNT; 
+
         const fileNames = ['samples1.mp3', 'samples2.mp3', 'samples3.mp3', 'samples4.mp3'];
         
+        // --- Audio Globals ---
         let audioCtx;
         const buffers = [];
         const gainNodes = [];
-        const sourceNodes = [];
+        const sourceNodes = []; // Чтобы останавливать при перезагрузке
         let isPlaying = false;
         let startTime = 0;
-        let loopDuration = 0;
 
+        // UI
         const statusText = document.getElementById('status-text');
         const errorDetails = document.getElementById('error-details');
         const startBtn = document.getElementById('start-btn');
         const overlay = document.getElementById('overlay');
-        const sweeper = document.getElementById('sweeper');
         const pads = document.querySelectorAll('.pad');
+        const wipers = document.querySelectorAll('.wiper');
 
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContext();
 
-        // Функция загрузки с проверкой ошибок
+        // Загрузчик
         async function loadSample(url, index) {
             try {
-                statusText.innerText = `Загрузка: ${url} ...`;
                 const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: Файл не найден`);
-                }
-
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const arrayBuffer = await response.arrayBuffer();
                 const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                
-                // Сохраняем в массив по индексу, чтобы порядок не сбился
                 buffers[index] = audioBuffer;
-                return true;
             } catch (e) {
-                console.error(e);
-                errorDetails.innerHTML += `Ошибка с файлом <b>${url}</b><br>${e.message}<br>`;
-                statusText.innerText = "ОШИБКА ЗАГРУЗКИ";
-                statusText.style.color = "var(--error)";
+                statusText.innerText = "ОШИБКА";
+                statusText.style.color = "red";
+                errorDetails.innerHTML += `Fail: ${url}<br>`;
                 throw e;
             }
         }
 
         async function init() {
             try {
-                // Грузим последовательно, чтобы видеть на каком файле упало
-                for (let i = 0; i < fileNames.length; i++) {
-                    await loadSample(fileNames[i], i);
-                    statusText.innerText = `Загружено ${i + 1} из ${fileNames.length}`;
-                }
-
-                loopDuration = buffers[0].duration; // Берем длину первого файла за основу
-                statusText.innerText = "ГОТОВО";
+                const promises = fileNames.map((f, i) => loadSample(f, i));
+                await Promise.all(promises);
+                statusText.innerText = `READY (${BPM} BPM)`;
                 startBtn.classList.add('ready');
-
-            } catch (err) {
-                // Ошибки уже обработаны внутри loadSample
-                console.log("Loading stopped due to errors.");
-            }
+            } catch (e) { console.error(e); }
         }
-
         init();
 
+        // Кнопка Старт
         startBtn.addEventListener('click', () => {
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            
-            // Защита от дурака: если буферы пустые
-            if (buffers.length !== fileNames.length) return;
-
             startPlayback();
             overlay.style.opacity = 0;
             setTimeout(() => overlay.style.display = 'none', 500);
         });
 
         function startPlayback() {
+            // Небольшая задержка перед стартом для надежности
             startTime = audioCtx.currentTime + 0.1;
 
             buffers.forEach((buffer, index) => {
@@ -274,6 +247,11 @@
                 source.buffer = buffer;
                 source.loop = true;
 
+                // --- КЛЮЧЕВОЙ МОМЕНТ: ПРИНУДИТЕЛЬНАЯ ДЛИТЕЛЬНОСТЬ ---
+                // Мы игнорируем фактическую длину MP3 и обрезаем по BPM
+                source.loopStart = 0;
+                source.loopEnd = LOOP_DURATION; 
+                
                 const gainNode = audioCtx.createGain();
                 gainNode.gain.value = 0;
 
@@ -287,39 +265,58 @@
             });
 
             isPlaying = true;
-            requestAnimationFrame(animateRadar);
+            requestAnimationFrame(animateWipers);
         }
 
+        // Логика нажатий
         pads.forEach(pad => {
             const idx = parseInt(pad.dataset.idx);
 
-            const toggleTrack = (e) => {
-                // Если не тач-событие, проверяем чтобы не дублировалось
+            const toggle = (e) => {
+                // Блокируем дубли событий (мышь + тач)
                 if (e.type === 'mousedown' && 'ontouchstart' in window) return;
-                
                 e.preventDefault();
+                
                 if (!isPlaying) return;
 
                 const gainNode = gainNodes[idx];
                 pad.classList.toggle('active');
                 const isActive = pad.classList.contains('active');
                 const now = audioCtx.currentTime;
-                
+
+                // Anti-click (быстрое затухание)
                 gainNode.gain.cancelScheduledValues(now);
-                gainNode.gain.setTargetAtTime(isActive ? 1 : 0, now, 0.05);
+                gainNode.gain.setTargetAtTime(isActive ? 1 : 0, now, 0.03);
             };
 
-            pad.addEventListener('touchstart', toggleTrack, {passive: false});
-            pad.addEventListener('mousedown', toggleTrack);
+            pad.addEventListener('touchstart', toggle, {passive: false});
+            pad.addEventListener('mousedown', toggle);
         });
 
-        function animateRadar() {
+        // Анимация вайперов
+        function animateWipers() {
             if (!isPlaying) return;
+
+            // Считаем прогресс цикла (0.0 -> 1.0)
             const elapsed = audioCtx.currentTime - startTime;
-            const currentPosition = Math.max(0, elapsed) % loopDuration;
-            const degrees = (currentPosition / loopDuration) * 360;
-            sweeper.style.transform = `rotate(${degrees}deg)`;
-            requestAnimationFrame(animateRadar);
+            // Корректируем, чтобы не было отрицательных значений на старте
+            const safeElapsed = Math.max(0, elapsed);
+            
+            const positionInLoop = safeElapsed % LOOP_DURATION;
+            const progress = positionInLoop / LOOP_DURATION;
+            
+            // Вращаем (0 -> 360 градусов)
+            const degrees = progress * 360;
+
+            // Применяем вращение ко всем вайперам
+            wipers.forEach(wiper => {
+                // Применяем transform только если родительский пэд активен (для оптимизации),
+                // но CSS opacity и так скрывает их. Лучше крутить всегда, чтобы при включении
+                // пэда вайпер уже был в правильной позиции.
+                wiper.style.transform = `rotate(${degrees}deg)`;
+            });
+
+            requestAnimationFrame(animateWipers);
         }
     </script>
 </body>
