@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Симулятор Китката 303</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #eee;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation; /* Убирает задержку тапа на мобильных */
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #ccc;
+        }
+
+        /* Сетка пэдов 2x2 */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 15px;
+            width: 90vw;
+            max-width: 400px;
+            aspect-ratio: 1 / 1;
+        }
+
+        .pad {
+            background-color: #444;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            box-shadow: 0 4px 0 #222;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .pad:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #222;
+        }
+
+        /* Цвета для активного состояния (как клипы в Ableton) */
+        .pad.active[data-id="1"] { background-color: #ff5f5f; box-shadow: 0 4px 0 #b33e3e; color: #000; }
+        .pad.active[data-id="2"] { background-color: #f7ff5f; box-shadow: 0 4px 0 #b3b93e; color: #000; }
+        .pad.active[data-id="3"] { background-color: #5fff8c; box-shadow: 0 4px 0 #3eb35f; color: #000; }
+        .pad.active[data-id="4"] { background-color: #5fccff; box-shadow: 0 4px 0 #3e8ab3; color: #000; }
+
+        /* Нажатая активная кнопка */
+        .pad.active:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 transparent;
+        }
+
+        /* Оверлей для старта (нужен из-за политик браузеров) */
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        #start-btn {
+            padding: 20px 40px;
+            font-size: 1.5rem;
+            background: #5fff8c;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Экран приветствия -->
+    <div id="overlay">
+        <h1 style="color:white; margin-bottom: 40px;">Симулятор Китката 303</h1>
+        <button id="start-btn">TAP TO START</button>
+        <p style="color: #777; margin-top: 20px;">Включите звук на телефоне</p>
+    </div>
+
+    <h1>KitKat 303</h1>
+
+    <div class="grid">
+        <!-- data-id соответствует номеру сэмпла -->
+        <div class="pad" data-id="1">1</div>
+        <div class="pad" data-id="2">2</div>
+        <div class="pad" data-id="3">3</div>
+        <div class="pad" data-id="4">4</div>
+    </div>
+
+    <div class="footer">evider.github.io</div>
+
+    <script>
+        // Конфигурация
+        const tracks = [
+            { id: 1, file: 'sample1.mp3', audio: new Audio() },
+            { id: 2, file: 'sample2.mp3', audio: new Audio() },
+            { id: 3, file: 'sample3.mp3', audio: new Audio() },
+            { id: 4, file: 'sample4.mp3', audio: new Audio() }
+        ];
+
+        let isPlaying = false;
+
+        // Инициализация аудио объектов
+        tracks.forEach(track => {
+            track.audio.src = track.file;
+            track.audio.loop = true; // Зацикливаем
+            track.audio.volume = 0;  // Изначально звук выключен
+            track.audio.preload = 'auto';
+        });
+
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('start-btn');
+        const pads = document.querySelectorAll('.pad');
+
+        // ЗАПУСК (AudioContext требует жеста пользователя)
+        startBtn.addEventListener('click', () => {
+            // Запускаем все треки одновременно
+            tracks.forEach(track => {
+                track.audio.play().catch(e => console.log("Error playing:", e));
+            });
+            
+            isPlaying = true;
+            overlay.style.display = 'none';
+        });
+
+        // Логика пэдов
+        pads.forEach(pad => {
+            pad.addEventListener('click', (e) => {
+                if (!isPlaying) return;
+
+                // Предотвращаем двойной зум и прочее
+                e.preventDefault();
+
+                const id = parseInt(pad.dataset.id);
+                const track = tracks.find(t => t.id === id);
+
+                // Переключаем состояние
+                if (pad.classList.contains('active')) {
+                    // Выключить
+                    pad.classList.remove('active');
+                    track.audio.volume = 0;
+                } else {
+                    // Включить
+                    pad.classList.add('active');
+                    track.audio.volume = 1;
+                    // Хак для синхронизации, если вдруг аудио отстало (на мобильных бывает),
+                    // подгоняем текущее время под первый трек (если он играет) или просто оставляем как есть.
+                    // В простейшем случае: так как они все запущены одновременно, 
+                    // просто меняем громкость — это самый надежный способ синхры для HTML5 Audio.
+                }
+            });
+            
+            // Обработка touch events для быстрой реакции
+            pad.addEventListener('touchstart', (e) => {
+                 // Этот код нужен, чтобы срабатывало мгновенно без задержки 300мс
+                 // Но click тоже оставим для десктопа
+            }, {passive: true});
+        });
+
+    </script>
+</body>
+</html>
