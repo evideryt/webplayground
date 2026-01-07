@@ -8,8 +8,9 @@
         :root {
             --bg: #1e1e1e;
             --pad-off: #3a3a3a;
-            --accent: #00ffcc; /* Цвет радара */
+            --accent: #00ffcc;
             --text: #ddd;
+            --error: #ff4d4d;
         }
 
         body {
@@ -20,10 +21,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: space-evenly; /* Распределяем место под радар и пэды */
+            justify-content: space-evenly;
             height: 100vh;
             overflow: hidden;
-            touch-action: none; /* Блокируем зум и скролл */
+            touch-action: none;
         }
 
         h1 {
@@ -39,16 +40,16 @@
         /* --- РАДАР --- */
         .radar-container {
             position: relative;
-            width: 120px;
-            height: 120px;
+            width: 140px;
+            height: 140px;
             border-radius: 50%;
             border: 2px solid #555;
             background: #252525;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-top: 40px;
+            margin-top: 30px;
         }
 
         .radar-sweeper {
@@ -56,9 +57,8 @@
             top: 0;
             left: 50%;
             width: 50%;
-            height: 50%; /* Половина высоты, чтобы крутиться из центра */
-            transform-origin: 0% 100%; /* Точка вращения - центр круга */
-            /* Градиент имитирует луч радара */
+            height: 50%;
+            transform-origin: 0% 100%;
             background: linear-gradient(90deg, transparent 95%, var(--accent) 100%);
             opacity: 0.6;
             pointer-events: none;
@@ -66,11 +66,11 @@
         }
 
         .radar-dot {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             background-color: var(--accent);
             border-radius: 50%;
-            box-shadow: 0 0 8px var(--accent);
+            box-shadow: 0 0 10px var(--accent);
         }
 
         /* --- ПЭДЫ --- */
@@ -100,15 +100,12 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Активные состояния пэдов (цвета Ableton) */
         .pad.active[data-idx="0"] { background-color: #ff4d4d; color: #000; box-shadow: 0 0 15px #ff4d4d; }
         .pad.active[data-idx="1"] { background-color: #ffff4d; color: #000; box-shadow: 0 0 15px #ffff4d; }
         .pad.active[data-idx="2"] { background-color: #4dff88; color: #000; box-shadow: 0 0 15px #4dff88; }
         .pad.active[data-idx="3"] { background-color: #4dffff; color: #000; box-shadow: 0 0 15px #4dffff; }
 
-        .pad:active {
-            transform: scale(0.98);
-        }
+        .pad:active { transform: scale(0.98); }
 
         /* --- OVERLAY --- */
         #overlay {
@@ -121,12 +118,22 @@
             justify-content: center;
             z-index: 100;
             transition: opacity 0.5s;
+            padding: 20px;
+            text-align: center;
         }
 
         #status-text {
             color: var(--accent);
             margin-bottom: 20px;
-            font-size: 0.9rem;
+            font-size: 1rem;
+            font-family: monospace;
+        }
+        
+        #error-details {
+            color: var(--error);
+            font-size: 0.8rem;
+            margin-top: 10px;
+            max-width: 80%;
         }
 
         #start-btn {
@@ -139,7 +146,7 @@
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 2px;
-            opacity: 0.5; /* Сначала неактивна пока грузим */
+            opacity: 0.3;
             pointer-events: none;
             transition: all 0.3s;
         }
@@ -150,33 +157,28 @@
             background: var(--accent);
             color: #000;
             font-weight: bold;
+            box-shadow: 0 0 20px var(--accent);
         }
 
-        .footer {
-            font-size: 0.7rem;
-            color: #555;
-            position: absolute;
-            bottom: 10px;
-        }
+        .footer { font-size: 0.7rem; color: #555; position: absolute; bottom: 10px; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
         <h1>Симулятор Китката 303</h1>
-        <p id="status-text">Загрузка сэмплов...</p>
+        <p id="status-text">Инициализация...</p>
         <button id="start-btn">TAP TO START</button>
+        <div id="error-details"></div>
     </div>
 
     <h1>KitKat 303</h1>
 
-    <!-- Радар -->
     <div class="radar-container">
-        <div class="radar-dot"></div> <!-- Точка в центре -->
+        <div class="radar-dot"></div>
         <div class="radar-sweeper" id="sweeper"></div>
     </div>
 
-    <!-- Пэды -->
     <div class="grid">
         <div class="pad" data-idx="0">1</div>
         <div class="pad" data-idx="1">2</div>
@@ -187,92 +189,100 @@
     <div class="footer">evider.github.io</div>
 
     <script>
-        // --- КОНФИГУРАЦИЯ ---
+        // ИМЕНА ФАЙЛОВ (Убедись, что на GitHub они называются точно так же)
         const fileNames = ['samples1.mp3', 'samples2.mp3', 'samples3.mp3', 'samples4.mp3'];
         
-        // --- WEB AUDIO API VARS ---
         let audioCtx;
-        const buffers = []; // Сюда декодируем звук
-        const gainNodes = []; // Ручки громкости для каждого трека
-        const sourceNodes = []; // Сами плееры
+        const buffers = [];
+        const gainNodes = [];
+        const sourceNodes = [];
         let isPlaying = false;
         let startTime = 0;
         let loopDuration = 0;
 
-        // UI Элементы
         const statusText = document.getElementById('status-text');
+        const errorDetails = document.getElementById('error-details');
         const startBtn = document.getElementById('start-btn');
         const overlay = document.getElementById('overlay');
         const sweeper = document.getElementById('sweeper');
         const pads = document.querySelectorAll('.pad');
 
-        // 1. Инициализация AudioContext (нужен клик для создания в некоторых браузерах, но конструктор можно вызвать сразу)
-        // Safari требует webkit prefix
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContext();
 
-        // 2. Функция загрузки файла
-        async function loadSample(url) {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-            return await audioCtx.decodeAudioData(arrayBuffer);
+        // Функция загрузки с проверкой ошибок
+        async function loadSample(url, index) {
+            try {
+                statusText.innerText = `Загрузка: ${url} ...`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: Файл не найден`);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                
+                // Сохраняем в массив по индексу, чтобы порядок не сбился
+                buffers[index] = audioBuffer;
+                return true;
+            } catch (e) {
+                console.error(e);
+                errorDetails.innerHTML += `Ошибка с файлом <b>${url}</b><br>${e.message}<br>`;
+                statusText.innerText = "ОШИБКА ЗАГРУЗКИ";
+                statusText.style.color = "var(--error)";
+                throw e;
+            }
         }
 
-        // 3. Загружаем все сразу
         async function init() {
             try {
-                const promises = fileNames.map(file => loadSample(file));
-                const decodedBuffers = await Promise.all(promises);
-                
-                decodedBuffers.forEach(buf => buffers.push(buf));
-                
-                // Берем длительность первого сэмпла за эталон цикла
-                loopDuration = buffers[0].duration;
+                // Грузим последовательно, чтобы видеть на каком файле упало
+                for (let i = 0; i < fileNames.length; i++) {
+                    await loadSample(fileNames[i], i);
+                    statusText.innerText = `Загружено ${i + 1} из ${fileNames.length}`;
+                }
 
-                statusText.innerText = "Готово к запуску";
+                loopDuration = buffers[0].duration; // Берем длину первого файла за основу
+                statusText.innerText = "ГОТОВО";
                 startBtn.classList.add('ready');
+
             } catch (err) {
-                statusText.innerText = "Ошибка загрузки: " + err;
-                console.error(err);
+                // Ошибки уже обработаны внутри loadSample
+                console.log("Loading stopped due to errors.");
             }
         }
 
-        // Запускаем загрузку при открытии страницы
         init();
 
-        // 4. Логика кнопки старт
         startBtn.addEventListener('click', () => {
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            // Защита от дурака: если буферы пустые
+            if (buffers.length !== fileNames.length) return;
+
             startPlayback();
             overlay.style.opacity = 0;
             setTimeout(() => overlay.style.display = 'none', 500);
         });
 
         function startPlayback() {
-            // Время старта (чуть в будущем, чтобы все точно успели синхронно)
             startTime = audioCtx.currentTime + 0.1;
 
             buffers.forEach((buffer, index) => {
-                // Создаем источник
                 const source = audioCtx.createBufferSource();
                 source.buffer = buffer;
                 source.loop = true;
 
-                // Создаем ручку громкости (GainNode)
                 const gainNode = audioCtx.createGain();
-                gainNode.gain.value = 0; // Сначала тишина
+                gainNode.gain.value = 0;
 
-                // Цепочка: Source -> Gain -> Master (Destination)
                 source.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
 
-                // Сохраняем ссылки, чтобы управлять потом
                 sourceNodes.push(source);
                 gainNodes.push(gainNode);
 
-                // Запускаем!
                 source.start(startTime);
             });
 
@@ -280,37 +290,37 @@
             requestAnimationFrame(animateRadar);
         }
 
-        // 5. Логика пэдов
         pads.forEach(pad => {
             const idx = parseInt(pad.dataset.idx);
 
-            // Обработчик нажатия (работает и на тач, и на клик)
             const toggleTrack = (e) => {
-                e.preventDefault(); // Чтобы не зумило
+                // Если не тач-событие, проверяем чтобы не дублировалось
+                if (e.type === 'mousedown' && 'ontouchstart' in window) return;
+                
+                e.preventDefault();
                 if (!isPlaying) return;
 
                 const gainNode = gainNodes[idx];
-                
-                // Переключаем класс
                 pad.classList.toggle('active');
                 const isActive = pad.classList.contains('active');
-
-                // Плавное изменение громкости (anti-click)
-                // setTargetAtTime делает экспоненциальный переход к значению
-                // playTime, targetValue, timeConstant
                 const now = audioCtx.currentTime;
                 
-                // Отменяем запланированные изменения (если быстро тыкать)
                 gainNode.gain.cancelScheduledValues(now);
-
-                if (isActive) {
-                    // Включаем (плавно до 1 за ~50ms)
-                    gainNode.gain.setTargetAtTime(1, now, 0.05);
-                } else {
-                    // Выключаем (плавно до 0 за ~50ms)
-                    gainNode.gain.setTargetAtTime(0, now, 0.05);
-                }
+                gainNode.gain.setTargetAtTime(isActive ? 1 : 0, now, 0.05);
             };
 
             pad.addEventListener('touchstart', toggleTrack, {passive: false});
-            pad.addEventListener('mousedown
+            pad.addEventListener('mousedown', toggleTrack);
+        });
+
+        function animateRadar() {
+            if (!isPlaying) return;
+            const elapsed = audioCtx.currentTime - startTime;
+            const currentPosition = Math.max(0, elapsed) % loopDuration;
+            const degrees = (currentPosition / loopDuration) * 360;
+            sweeper.style.transform = `rotate(${degrees}deg)`;
+            requestAnimationFrame(animateRadar);
+        }
+    </script>
+</body>
+</html>
