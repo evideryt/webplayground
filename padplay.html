@@ -5,190 +5,312 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Симулятор Китката 303</title>
     <style>
+        :root {
+            --bg: #1e1e1e;
+            --pad-off: #3a3a3a;
+            --accent: #00ffcc; /* Цвет радара */
+            --text: #ddd;
+        }
+
         body {
-            background-color: #1a1a1a;
-            color: #eee;
+            background-color: var(--bg);
+            color: var(--text);
             font-family: 'Courier New', Courier, monospace;
             margin: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: space-evenly; /* Распределяем место под радар и пэды */
             height: 100vh;
             overflow: hidden;
-            touch-action: manipulation; /* Убирает задержку тапа на мобильных */
+            touch-action: none; /* Блокируем зум и скролл */
         }
 
         h1 {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
+            font-size: 1rem;
+            margin: 0;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            color: #ccc;
+            letter-spacing: 1px;
+            opacity: 0.7;
+            position: absolute;
+            top: 20px;
         }
 
-        /* Сетка пэдов 2x2 */
+        /* --- РАДАР --- */
+        .radar-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 2px solid #555;
+            background: #252525;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        .radar-sweeper {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 50%;
+            height: 50%; /* Половина высоты, чтобы крутиться из центра */
+            transform-origin: 0% 100%; /* Точка вращения - центр круга */
+            /* Градиент имитирует луч радара */
+            background: linear-gradient(90deg, transparent 95%, var(--accent) 100%);
+            opacity: 0.6;
+            pointer-events: none;
+            will-change: transform;
+        }
+
+        .radar-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        /* --- ПЭДЫ --- */
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
             gap: 15px;
-            width: 90vw;
-            max-width: 400px;
+            width: 85vw;
+            max-width: 350px;
             aspect-ratio: 1 / 1;
         }
 
         .pad {
-            background-color: #444;
-            border-radius: 8px;
+            background-color: var(--pad-off);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 1.5rem;
+            font-size: 2rem;
             cursor: pointer;
-            transition: all 0.1s ease;
-            box-shadow: 0 4px 0 #222;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            transition: background-color 0.1s;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* Активные состояния пэдов (цвета Ableton) */
+        .pad.active[data-idx="0"] { background-color: #ff4d4d; color: #000; box-shadow: 0 0 15px #ff4d4d; }
+        .pad.active[data-idx="1"] { background-color: #ffff4d; color: #000; box-shadow: 0 0 15px #ffff4d; }
+        .pad.active[data-idx="2"] { background-color: #4dff88; color: #000; box-shadow: 0 0 15px #4dff88; }
+        .pad.active[data-idx="3"] { background-color: #4dffff; color: #000; box-shadow: 0 0 15px #4dffff; }
+
         .pad:active {
-            transform: translateY(4px);
-            box-shadow: 0 0 0 #222;
+            transform: scale(0.98);
         }
 
-        /* Цвета для активного состояния (как клипы в Ableton) */
-        .pad.active[data-id="1"] { background-color: #ff5f5f; box-shadow: 0 4px 0 #b33e3e; color: #000; }
-        .pad.active[data-id="2"] { background-color: #f7ff5f; box-shadow: 0 4px 0 #b3b93e; color: #000; }
-        .pad.active[data-id="3"] { background-color: #5fff8c; box-shadow: 0 4px 0 #3eb35f; color: #000; }
-        .pad.active[data-id="4"] { background-color: #5fccff; box-shadow: 0 4px 0 #3e8ab3; color: #000; }
-
-        /* Нажатая активная кнопка */
-        .pad.active:active {
-            transform: translateY(4px);
-            box-shadow: 0 0 0 transparent;
-        }
-
-        /* Оверлей для старта (нужен из-за политик браузеров) */
+        /* --- OVERLAY --- */
         #overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0,0,0,0.95);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 100;
+            transition: opacity 0.5s;
+        }
+
+        #status-text {
+            color: var(--accent);
+            margin-bottom: 20px;
+            font-size: 0.9rem;
         }
 
         #start-btn {
-            padding: 20px 40px;
-            font-size: 1.5rem;
-            background: #5fff8c;
-            border: none;
+            padding: 20px 50px;
+            font-size: 1.2rem;
+            background: transparent;
+            border: 2px solid var(--accent);
+            color: var(--accent);
             border-radius: 50px;
             cursor: pointer;
-            font-weight: bold;
             text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.5; /* Сначала неактивна пока грузим */
+            pointer-events: none;
+            transition: all 0.3s;
         }
-        
+
+        #start-btn.ready {
+            opacity: 1;
+            pointer-events: auto;
+            background: var(--accent);
+            color: #000;
+            font-weight: bold;
+        }
+
         .footer {
-            margin-top: 20px;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: #555;
+            position: absolute;
+            bottom: 10px;
         }
     </style>
 </head>
 <body>
 
-    <!-- Экран приветствия -->
     <div id="overlay">
-        <h1 style="color:white; margin-bottom: 40px;">Симулятор Китката 303</h1>
+        <h1>Симулятор Китката 303</h1>
+        <p id="status-text">Загрузка сэмплов...</p>
         <button id="start-btn">TAP TO START</button>
-        <p style="color: #777; margin-top: 20px;">Включите звук на телефоне</p>
     </div>
 
     <h1>KitKat 303</h1>
 
+    <!-- Радар -->
+    <div class="radar-container">
+        <div class="radar-dot"></div> <!-- Точка в центре -->
+        <div class="radar-sweeper" id="sweeper"></div>
+    </div>
+
+    <!-- Пэды -->
     <div class="grid">
-        <!-- data-id соответствует номеру сэмпла -->
-        <div class="pad" data-id="1">1</div>
-        <div class="pad" data-id="2">2</div>
-        <div class="pad" data-id="3">3</div>
-        <div class="pad" data-id="4">4</div>
+        <div class="pad" data-idx="0">1</div>
+        <div class="pad" data-idx="1">2</div>
+        <div class="pad" data-idx="2">3</div>
+        <div class="pad" data-idx="3">4</div>
     </div>
 
     <div class="footer">evider.github.io</div>
 
     <script>
-        // Конфигурация
-        const tracks = [
-            { id: 1, file: 'sample1.mp3', audio: new Audio() },
-            { id: 2, file: 'sample2.mp3', audio: new Audio() },
-            { id: 3, file: 'sample3.mp3', audio: new Audio() },
-            { id: 4, file: 'sample4.mp3', audio: new Audio() }
-        ];
-
+        // --- КОНФИГУРАЦИЯ ---
+        const fileNames = ['samples1.mp3', 'samples2.mp3', 'samples3.mp3', 'samples4.mp3'];
+        
+        // --- WEB AUDIO API VARS ---
+        let audioCtx;
+        const buffers = []; // Сюда декодируем звук
+        const gainNodes = []; // Ручки громкости для каждого трека
+        const sourceNodes = []; // Сами плееры
         let isPlaying = false;
+        let startTime = 0;
+        let loopDuration = 0;
 
-        // Инициализация аудио объектов
-        tracks.forEach(track => {
-            track.audio.src = track.file;
-            track.audio.loop = true; // Зацикливаем
-            track.audio.volume = 0;  // Изначально звук выключен
-            track.audio.preload = 'auto';
-        });
-
-        const overlay = document.getElementById('overlay');
+        // UI Элементы
+        const statusText = document.getElementById('status-text');
         const startBtn = document.getElementById('start-btn');
+        const overlay = document.getElementById('overlay');
+        const sweeper = document.getElementById('sweeper');
         const pads = document.querySelectorAll('.pad');
 
-        // ЗАПУСК (AudioContext требует жеста пользователя)
+        // 1. Инициализация AudioContext (нужен клик для создания в некоторых браузерах, но конструктор можно вызвать сразу)
+        // Safari требует webkit prefix
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+
+        // 2. Функция загрузки файла
+        async function loadSample(url) {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            return await audioCtx.decodeAudioData(arrayBuffer);
+        }
+
+        // 3. Загружаем все сразу
+        async function init() {
+            try {
+                const promises = fileNames.map(file => loadSample(file));
+                const decodedBuffers = await Promise.all(promises);
+                
+                decodedBuffers.forEach(buf => buffers.push(buf));
+                
+                // Берем длительность первого сэмпла за эталон цикла
+                loopDuration = buffers[0].duration;
+
+                statusText.innerText = "Готово к запуску";
+                startBtn.classList.add('ready');
+            } catch (err) {
+                statusText.innerText = "Ошибка загрузки: " + err;
+                console.error(err);
+            }
+        }
+
+        // Запускаем загрузку при открытии страницы
+        init();
+
+        // 4. Логика кнопки старт
         startBtn.addEventListener('click', () => {
-            // Запускаем все треки одновременно
-            tracks.forEach(track => {
-                track.audio.play().catch(e => console.log("Error playing:", e));
-            });
-            
-            isPlaying = true;
-            overlay.style.display = 'none';
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            startPlayback();
+            overlay.style.opacity = 0;
+            setTimeout(() => overlay.style.display = 'none', 500);
         });
 
-        // Логика пэдов
+        function startPlayback() {
+            // Время старта (чуть в будущем, чтобы все точно успели синхронно)
+            startTime = audioCtx.currentTime + 0.1;
+
+            buffers.forEach((buffer, index) => {
+                // Создаем источник
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+
+                // Создаем ручку громкости (GainNode)
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.value = 0; // Сначала тишина
+
+                // Цепочка: Source -> Gain -> Master (Destination)
+                source.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                // Сохраняем ссылки, чтобы управлять потом
+                sourceNodes.push(source);
+                gainNodes.push(gainNode);
+
+                // Запускаем!
+                source.start(startTime);
+            });
+
+            isPlaying = true;
+            requestAnimationFrame(animateRadar);
+        }
+
+        // 5. Логика пэдов
         pads.forEach(pad => {
-            pad.addEventListener('click', (e) => {
+            const idx = parseInt(pad.dataset.idx);
+
+            // Обработчик нажатия (работает и на тач, и на клик)
+            const toggleTrack = (e) => {
+                e.preventDefault(); // Чтобы не зумило
                 if (!isPlaying) return;
 
-                // Предотвращаем двойной зум и прочее
-                e.preventDefault();
+                const gainNode = gainNodes[idx];
+                
+                // Переключаем класс
+                pad.classList.toggle('active');
+                const isActive = pad.classList.contains('active');
 
-                const id = parseInt(pad.dataset.id);
-                const track = tracks.find(t => t.id === id);
+                // Плавное изменение громкости (anti-click)
+                // setTargetAtTime делает экспоненциальный переход к значению
+                // playTime, targetValue, timeConstant
+                const now = audioCtx.currentTime;
+                
+                // Отменяем запланированные изменения (если быстро тыкать)
+                gainNode.gain.cancelScheduledValues(now);
 
-                // Переключаем состояние
-                if (pad.classList.contains('active')) {
-                    // Выключить
-                    pad.classList.remove('active');
-                    track.audio.volume = 0;
+                if (isActive) {
+                    // Включаем (плавно до 1 за ~50ms)
+                    gainNode.gain.setTargetAtTime(1, now, 0.05);
                 } else {
-                    // Включить
-                    pad.classList.add('active');
-                    track.audio.volume = 1;
-                    // Хак для синхронизации, если вдруг аудио отстало (на мобильных бывает),
-                    // подгоняем текущее время под первый трек (если он играет) или просто оставляем как есть.
-                    // В простейшем случае: так как они все запущены одновременно, 
-                    // просто меняем громкость — это самый надежный способ синхры для HTML5 Audio.
+                    // Выключаем (плавно до 0 за ~50ms)
+                    gainNode.gain.setTargetAtTime(0, now, 0.05);
                 }
-            });
-            
-            // Обработка touch events для быстрой реакции
-            pad.addEventListener('touchstart', (e) => {
-                 // Этот код нужен, чтобы срабатывало мгновенно без задержки 300мс
-                 // Но click тоже оставим для десктопа
-            }, {passive: true});
-        });
+            };
 
-    </script>
-</body>
-</html>
+            pad.addEventListener('touchstart', toggleTrack, {passive: false});
+            pad.addEventListener('mousedown
