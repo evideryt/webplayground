@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RetroWave Visualizer 3.0</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-blue: #00ffff;
+            /* Фон экрана ТВ стал прозрачнее, чтобы видеть звезды */
+            --crt-bg: rgba(10, 10, 16, 0.4); 
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #020205; /* Глубокий черный */
+            color: var(--neon-blue);
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* --- ЗВЕЗДЫ / WARP ЭФФЕКТ --- */
+        .stars-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            perspective: 500px;
+            overflow: hidden;
+        }
+
+        .star {
+            position: absolute;
+            background: linear-gradient(to top, rgba(255,255,255,0), #fff); /* Шлейф */
+            width: 2px; /* Толщина луча */
+            border-radius: 2px;
+            opacity: 0;
+            animation: fall linear infinite;
+        }
+
+        @keyframes fall {
+            0% {
+                transform: translateY(-20vh); /* Старт выше экрана */
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(120vh); /* Полет вниз */
+                opacity: 0.5;
+            }
+        }
+
+        /* --- ИНТЕРФЕЙС --- */
+        #input-screen, #visualizer-screen {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            display: none !important;
+        }
+
+        /* Меню ввода */
+        .input-container {
+            width: 90%;
+            max-width: 400px;
+            background: rgba(15, 15, 20, 0.95);
+            border: 2px solid var(--neon-blue);
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            color: var(--neon-pink);
+            font-size: 2.5rem;
+            margin: 0 0 15px 0;
+            text-shadow: 3px 3px 0px rgba(0,0,0,0.5);
+            font-weight: normal;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background: #080808;
+            color: var(--neon-pink);
+            border: 1px solid var(--neon-pink);
+            font-family: 'VT323', monospace;
+            font-size: 1.3rem;
+            padding: 10px;
+            resize: none;
+            margin-bottom: 15px;
+            outline: none;
+        }
+
+        .mode-switch {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .mode-switch input {
+            margin-left: 10px;
+            width: 20px;
+            height: 20px;
+            accent-color: var(--neon-pink);
+        }
+
+        button {
+            background: transparent;
+            color: var(--neon-blue);
+            border: 2px solid var(--neon-blue);
+            font-family: 'VT323', monospace;
+            font-size: 1.6rem;
+            padding: 10px 30px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 10px var(--neon-blue);
+            transition: 0.1s;
+        }
+
+        button:active {
+            background: var(--neon-blue);
+            color: #000;
+            transform: scale(0.98);
+        }
+
+        /* Визуализатор */
+        .restart-btn {
+            position: absolute;
+            top: 20px; right: 20px;
+            font-size: 1rem;
+            padding: 5px 15px;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            border-color: var(--neon-pink);
+            color: var(--neon-pink);
+            box-shadow: none;
+        }
+
+        /* ТВ Рамка */
+        .tv-frame {
+            width: 95vw; 
+            max-width: 600px;
+            aspect-ratio: 4 / 3;
+            background: var(--crt-bg); /* Прозрачность */
+            border: 3px solid #333;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 40px rgba(255, 0, 255, 0.1);
+        }
+
+        /* Текст лирики */
+        .lyrics-text {
+            width: 90%; 
+            height: 90%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            
+            /* Дефолтное значение, будет переписано JS */
+            font-size: 50px; 
+            
+            line-height: 1.1;
+            color: #fff;
+            text-shadow: 
+                3px 3px 0px var(--neon-pink),
+                -2px -2px 0px var(--neon-blue);
+            white-space: pre-wrap; 
+            word-wrap: break-word;
+        }
+
+        /* CRT Эффекты */
+        .scanlines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0.6;
+        }
+
+        .crt-glow {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
+            pointer-events: none;
+            z-index: 6;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="stars-container" id="star-bg"></div>
+
+    <!-- ЭКРАН ВВОДА -->
+    <div id="input-screen">
+        <div class="input-container">
+            <h1>RETRO TEXT</h1>
+            <textarea id="user-text" placeholder='Введи текст сюда...
+
+Режим по слогам:
+Я|дер|жу те|бя за|ру|ку'></textarea>
+            
+            <label class="mode-switch">
+                Разбивка по слогам (|)
+                <input type="checkbox" id="syllable-mode">
+            </label>
+
+            <button onclick="startVisualizer()">НАЧАТЬ ЗАПИСЬ</button>
+        </div>
+    </div>
+
+    <!-- ЭКРАН ВИЗУАЛИЗАТОРА -->
+    <div id="visualizer-screen" class="hidden" onclick="handleTap()">
+        <button class="restart-btn" onclick="resetApp(event)">ЗАНОВО</button>
+        
+        <div class="tv-frame" id="tv-frame">
+            <div class="scanlines"></div>
+            <div class="crt-glow"></div>
+            <div class="lyrics-text" id="display-area"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. ГЕНЕРАЦИЯ ЗВЕЗД (WARP SPEED ВНИЗ) ---
+        const starContainer = document.getElementById('star-bg');
+        const starCount = 60;
+
+        for (let i = 0; i < starCount; i++) {
+            let star = document.createElement('div');
+            star.className = 'star';
+            
+            // Рандомная позиция по X
+            star.style.left = Math.random() * 100 + 'vw';
+            
+            // Параллакс эффект:
+            // Чем длиннее звезда, тем быстрее она летит и тем она ярче
+            let depth = Math.random(); // 0..1 (1 - близко, 0 - далеко)
+            
+            let length = 20 + (depth * 100); // Длина от 20px до 120px
+            star.style.height = length + 'px';
+            
+            let duration = 0.5 + ((1 - depth) * 1.5); // Скорость от 0.5с (быстро) до 2с (медленно)
+            star.style.animationDuration = duration + 's';
+            
+            // Случайная задержка чтобы не летели пачкой
+            star.style.animationDelay = (Math.random() * 2) + 's';
+            
+            starContainer.appendChild(star);
+        }
+
+        // --- 2. ЛОГИКА ---
+        let parsedLines = [];
+        let currentLineIndex = 0;
+        let currentPartIndex = 0;
+        let isStarted = false;
+        
+        const inputScreen = document.getElementById('input-screen');
+        const visualizerScreen = document.getElementById('visualizer-screen');
+        const displayArea = document.getElementById('display-area');
+        const textarea = document.getElementById('user-text');
+        const syllableModeCheckbox = document.getElementById('syllable-mode');
+        const tvFrame = document.getElementById('tv-frame');
+
+        function startVisualizer() {
+            const rawText = textarea.value;
+            if (!rawText.trim()) return;
+
+            const isSyllableMode = syllableModeCheckbox.checked;
+
+            parsedLines = rawText.split('\n').map(line => {
+                line = line.trim();
+                if (!line) return []; 
+
+                if (isSyllableMode) {
+                    return line.split('|').filter(s => s.length > 0);
+                } else {
+                    return line.split(/\s+/).filter(w => w.length > 0);
+                }
+            });
+
+            currentLineIndex = 0;
+            currentPartIndex = -1;
+            
+            inputScreen.classList.add('hidden');
+            visualizerScreen.classList.remove('hidden');
+            
+            displayArea.innerText = "";
+            isStarted = true;
+        }
+
+        // --- ФУНКЦИЯ АВТО-РАЗМЕРА ШРИФТА ---
+        function fitText() {
+            const text = displayArea.innerText;
+            if (!text) return;
+
+            // Размеры контейнера (минус небольшой паддинг)
+            const maxWidth = tvFrame.clientWidth * 0.85; 
+            const maxHeight = tvFrame.clientHeight * 0.85;
+
+            // 1. Ставим максимально возможный шрифт (например, 15% от высоты экрана, чтобы не было гигантским на десктопе, но большим на мобиле)
+            let fontSize = 150; // Начинаем с очень большого
+            displayArea.style.fontSize = fontSize + 'px';
+
+            // 2. Цикл уменьшения
+            // scrollWidth/Height - это реальный размер контента. 
+            // Пока контент больше контейнера -> уменьшаем шрифт.
+            while (
+                (displayArea.scrollWidth > maxWidth || displayArea.scrollHeight > maxHeight) 
+                && fontSize > 10
+            ) {
+                fontSize -= 5; // Шаг уменьшения
+                displayArea.style.fontSize = fontSize + 'px';
+            }
+        }
+
+        function handleTap() {
+            if (!isStarted) return;
+            if (currentLineIndex >= parsedLines.length) return;
+
+            const currentLineParts = parsedLines[currentLineIndex];
+
+            // Пропуск пустых строк
+            if (currentLineParts.length === 0) {
+                displayArea.innerText = "";
+                currentLineIndex++;
+                currentPartIndex = -1;
+                return;
+            }
+
+            currentPartIndex++;
+
+            if (currentPartIndex >= currentLineParts.length) {
+                // Новая строка
+                currentLineIndex++;
+                currentPartIndex = 0;
+
+                if (currentLineIndex < parsedLines.length) {
+                    const nextLineParts = parsedLines[currentLineIndex];
+                    if (nextLineParts.length > 0) {
+                        displayArea.innerText = nextLineParts[0];
+                    } else {
+                        displayArea.innerText = "";
+                    }
+                }
+            } else {
+                // Добавляем слово/слог к текущей строке
+                const isSyllableMode = syllableModeCheckbox.checked;
+                // Если слоги - клеим без пробела, если слова - с пробелом
+                // (если ты хочешь пробелы и в слогах, замени "" на " ")
+                const separator = isSyllableMode ? "" : " "; 
+                
+                let textToShow = currentLineParts.slice(0, currentPartIndex + 1).join(separator);
+                displayArea.innerText = textToShow;
+            }
+
+            // Вызываем подгонку шрифта после отрисовки текста
+            // requestAnimationFrame гарантирует, что браузер уже знает новый текст
+            requestAnimationFrame(fitText);
+        }
+
+        function resetApp(e) {
+            e.stopPropagation();
+            isStarted = false;
+            visualizerScreen.classList.add('hidden');
+            inputScreen.classList.remove('hidden');
+            displayArea.innerText = "";
+            textarea.value = ""; // Очистить ввод, если нужно
+        }
+        
+        // Пересчет шрифта при повороте экрана
+        window.addEventListener('resize', () => {
+             if(isStarted) fitText();
+        });
+    </script>
+</body>
+</html>
