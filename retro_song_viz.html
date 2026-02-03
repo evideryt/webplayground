@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RetroWave Visualizer 3.0</title>
+    <title>RetroWave Visualizer Final</title>
     
+    <!-- Подключаем Share Tech Mono (поддерживает Кириллицу и выглядит как VCR OSD) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --neon-pink: #ff00ff;
+            --neon-pink: #ff00de;
             --neon-blue: #00ffff;
-            /* Фон экрана ТВ стал прозрачнее, чтобы видеть звезды */
-            --crt-bg: rgba(10, 10, 16, 0.4); 
+            --crt-bg: rgba(10, 10, 12, 0.3);
         }
 
         * {
@@ -26,9 +26,9 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #020205; /* Глубокий черный */
+            background-color: #000;
             color: var(--neon-blue);
-            font-family: 'VT323', monospace;
+            font-family: 'Share Tech Mono', monospace; /* Новый шрифт */
             overflow: hidden;
             height: 100vh;
             display: flex;
@@ -36,89 +36,68 @@
             align-items: center;
         }
 
-        /* --- ЗВЕЗДЫ / WARP ЭФФЕКТ --- */
+        /* --- ЗВЕЗДЫ (Летят ВНИЗ) --- */
         .stars-container {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1;
             perspective: 500px;
-            overflow: hidden;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
         }
 
         .star {
             position: absolute;
-            background: linear-gradient(to top, rgba(255,255,255,0), #fff); /* Шлейф */
-            width: 2px; /* Толщина луча */
-            border-radius: 2px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), #fff);
+            width: 2px;
             opacity: 0;
             animation: fall linear infinite;
         }
 
         @keyframes fall {
-            0% {
-                transform: translateY(-20vh); /* Старт выше экрана */
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            100% {
-                transform: translateY(120vh); /* Полет вниз */
-                opacity: 0.5;
-            }
+            0% { transform: translateY(-30vh); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: translateY(130vh); opacity: 0.3; }
         }
 
         /* --- ИНТЕРФЕЙС --- */
         #input-screen, #visualizer-screen {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0; left: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
             transition: opacity 0.3s ease;
             z-index: 10;
         }
 
         .hidden {
-            opacity: 0;
-            pointer-events: none;
             display: none !important;
         }
 
         /* Меню ввода */
         .input-container {
-            width: 90%;
-            max-width: 400px;
-            background: rgba(15, 15, 20, 0.95);
+            width: 90%; max-width: 400px;
+            background: rgba(20, 20, 25, 0.9);
             border: 2px solid var(--neon-blue);
             padding: 20px;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
             text-align: center;
-            backdrop-filter: blur(10px);
         }
 
         h1 {
             color: var(--neon-pink);
-            font-size: 2.5rem;
+            font-size: 2.2rem;
             margin: 0 0 15px 0;
-            text-shadow: 3px 3px 0px rgba(0,0,0,0.5);
-            font-weight: normal;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 0 #000;
         }
 
         textarea {
-            width: 100%;
-            height: 150px;
-            background: #080808;
+            width: 100%; height: 150px;
+            background: #111;
             color: var(--neon-pink);
-            border: 1px solid var(--neon-pink);
-            font-family: 'VT323', monospace;
-            font-size: 1.3rem;
+            border: 1px solid #444;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 1.2rem;
             padding: 10px;
             resize: none;
             margin-bottom: 15px;
@@ -126,19 +105,13 @@
         }
 
         .mode-switch {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
-            color: #fff;
-            font-size: 1.2rem;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 20px; color: #fff; font-size: 1rem;
             cursor: pointer;
         }
-
+        
         .mode-switch input {
-            margin-left: 10px;
-            width: 20px;
-            height: 20px;
+            margin-left: 10px; width: 20px; height: 20px;
             accent-color: var(--neon-pink);
         }
 
@@ -146,109 +119,91 @@
             background: transparent;
             color: var(--neon-blue);
             border: 2px solid var(--neon-blue);
-            font-family: 'VT323', monospace;
-            font-size: 1.6rem;
-            padding: 10px 30px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 1.5rem;
+            padding: 12px 30px;
             cursor: pointer;
             text-transform: uppercase;
-            box-shadow: 0 0 10px var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0,255,255,0.3);
             transition: 0.1s;
         }
-
         button:active {
-            background: var(--neon-blue);
-            color: #000;
-            transform: scale(0.98);
+            background: var(--neon-blue); color: #000;
         }
 
-        /* Визуализатор */
+        /* --- ВИЗУАЛИЗАТОР --- */
         .restart-btn {
-            position: absolute;
-            top: 20px; right: 20px;
-            font-size: 1rem;
-            padding: 5px 15px;
-            z-index: 100;
-            background: rgba(0,0,0,0.8);
-            border-color: var(--neon-pink);
-            color: var(--neon-pink);
+            position: absolute; top: 20px; right: 20px;
+            font-size: 1rem; padding: 8px 15px; z-index: 100;
+            background: rgba(0,0,0,0.7);
+            border-color: var(--neon-pink); color: var(--neon-pink);
             box-shadow: none;
         }
 
-        /* ТВ Рамка */
         .tv-frame {
-            width: 95vw; 
+            width: 95vw;
             max-width: 600px;
             aspect-ratio: 4 / 3;
-            background: var(--crt-bg); /* Прозрачность */
+            background: var(--crt-bg);
             border: 3px solid #333;
-            border-radius: 10px;
+            border-radius: 12px;
             position: relative;
-            overflow: hidden;
+            overflow: hidden; /* Важно: скрываем всё, что вылазит */
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 0 40px rgba(255, 0, 255, 0.1);
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
         }
 
-        /* Текст лирики */
         .lyrics-text {
+            /* Контейнер текста не должен иметь жестких паддингов, 
+               чтобы вычисления JS были точными */
             width: 90%; 
-            height: 90%;
             display: flex;
             align-items: center;
             justify-content: center;
             text-align: center;
             
-            /* Дефолтное значение, будет переписано JS */
-            font-size: 50px; 
-            
+            /* Дефолт (перепишется JS) */
+            font-size: 20px;
             line-height: 1.1;
+            
             color: #fff;
             text-shadow: 
-                3px 3px 0px var(--neon-pink),
-                -2px -2px 0px var(--neon-blue);
-            white-space: pre-wrap; 
-            word-wrap: break-word;
+                0 0 5px var(--neon-pink),
+                0 0 10px var(--neon-blue);
+            
+            white-space: pre-wrap; /* Перенос строк */
+            word-break: break-word;
         }
 
-        /* CRT Эффекты */
+        /* Эффекты */
         .scanlines {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: linear-gradient(
                 to bottom,
+                rgba(255,255,255,0),
                 rgba(255,255,255,0) 50%,
-                rgba(0,0,0,0.2) 50%
+                rgba(0,0,0,0.3) 50%,
+                rgba(0,0,0,0.3)
             );
             background-size: 100% 4px;
-            pointer-events: none;
-            z-index: 5;
-            opacity: 0.6;
+            pointer-events: none; z-index: 5; opacity: 0.7;
         }
-
-        .crt-glow {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
-            pointer-events: none;
-            z-index: 6;
-        }
-
     </style>
 </head>
 <body>
 
     <div class="stars-container" id="star-bg"></div>
 
-    <!-- ЭКРАН ВВОДА -->
     <div id="input-screen">
         <div class="input-container">
-            <h1>RETRO TEXT</h1>
-            <textarea id="user-text" placeholder='Введи текст сюда...
-
-Режим по слогам:
-Я|дер|жу те|бя за|ру|ку'></textarea>
+            <h1>RETRO INPUT</h1>
+            <!-- В value пусто, пример в placeholder -->
+            <textarea id="user-text" placeholder="Введите текст..."></textarea>
             
             <label class="mode-switch">
-                Разбивка по слогам (|)
+                Режим по слогам (|)
                 <input type="checkbox" id="syllable-mode">
             </label>
 
@@ -256,46 +211,35 @@
         </div>
     </div>
 
-    <!-- ЭКРАН ВИЗУАЛИЗАТОРА -->
     <div id="visualizer-screen" class="hidden" onclick="handleTap()">
         <button class="restart-btn" onclick="resetApp(event)">ЗАНОВО</button>
         
         <div class="tv-frame" id="tv-frame">
             <div class="scanlines"></div>
-            <div class="crt-glow"></div>
             <div class="lyrics-text" id="display-area"></div>
         </div>
     </div>
 
     <script>
-        // --- 1. ГЕНЕРАЦИЯ ЗВЕЗД (WARP SPEED ВНИЗ) ---
+        // --- ЗВЕЗДЫ ---
         const starContainer = document.getElementById('star-bg');
-        const starCount = 60;
-
-        for (let i = 0; i < starCount; i++) {
+        for (let i = 0; i < 60; i++) {
             let star = document.createElement('div');
             star.className = 'star';
-            
-            // Рандомная позиция по X
             star.style.left = Math.random() * 100 + 'vw';
             
-            // Параллакс эффект:
-            // Чем длиннее звезда, тем быстрее она летит и тем она ярче
-            let depth = Math.random(); // 0..1 (1 - близко, 0 - далеко)
-            
-            let length = 20 + (depth * 100); // Длина от 20px до 120px
+            let depth = Math.random(); // 0..1
+            let length = 30 + (depth * 100);
             star.style.height = length + 'px';
             
-            let duration = 0.5 + ((1 - depth) * 1.5); // Скорость от 0.5с (быстро) до 2с (медленно)
+            // Те что длиннее - летят быстрее
+            let duration = 0.8 + ((1 - depth) * 1.5);
             star.style.animationDuration = duration + 's';
-            
-            // Случайная задержка чтобы не летели пачкой
-            star.style.animationDelay = (Math.random() * 2) + 's';
-            
+            star.style.animationDelay = (Math.random() * 3) + 's';
             starContainer.appendChild(star);
         }
 
-        // --- 2. ЛОГИКА ---
+        // --- ЛОГИКА ---
         let parsedLines = [];
         let currentLineIndex = 0;
         let currentPartIndex = 0;
@@ -316,8 +260,7 @@
 
             parsedLines = rawText.split('\n').map(line => {
                 line = line.trim();
-                if (!line) return []; 
-
+                if (!line) return [];
                 if (isSyllableMode) {
                     return line.split('|').filter(s => s.length > 0);
                 } else {
@@ -330,32 +273,31 @@
             
             inputScreen.classList.add('hidden');
             visualizerScreen.classList.remove('hidden');
-            
             displayArea.innerText = "";
             isStarted = true;
         }
 
-        // --- ФУНКЦИЯ АВТО-РАЗМЕРА ШРИФТА ---
+        // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ РАЗМЕРА ---
         function fitText() {
             const text = displayArea.innerText;
             if (!text) return;
 
-            // Размеры контейнера (минус небольшой паддинг)
-            const maxWidth = tvFrame.clientWidth * 0.85; 
-            const maxHeight = tvFrame.clientHeight * 0.85;
-
-            // 1. Ставим максимально возможный шрифт (например, 15% от высоты экрана, чтобы не было гигантским на десктопе, но большим на мобиле)
-            let fontSize = 150; // Начинаем с очень большого
+            // 1. Сбрасываем размер на ГИГАНТСКИЙ (в зависимости от высоты экрана)
+            // 15vh = 15% высоты экрана (на мобиле это очень много для одной строки)
+            let fontSize = window.innerHeight * 0.15; 
             displayArea.style.fontSize = fontSize + 'px';
 
-            // 2. Цикл уменьшения
-            // scrollWidth/Height - это реальный размер контента. 
-            // Пока контент больше контейнера -> уменьшаем шрифт.
+            // Получаем доступное место (высота рамки минус отступы)
+            const maxHeight = tvFrame.clientHeight * 0.9;
+            const maxWidth = tvFrame.clientWidth * 0.9;
+
+            // 2. Уменьшаем, пока не влезет
+            // scrollHeight - это полная высота текста. Если она больше доступной высоты - уменьшаем.
             while (
-                (displayArea.scrollWidth > maxWidth || displayArea.scrollHeight > maxHeight) 
-                && fontSize > 10
+                (displayArea.scrollHeight > maxHeight || displayArea.scrollWidth > maxWidth) 
+                && fontSize > 12 // Минимальный предел чтобы браузер не завис
             ) {
-                fontSize -= 5; // Шаг уменьшения
+                fontSize -= 2; // Шаг уменьшения (можно 1 для точности или 5 для скорости)
                 displayArea.style.fontSize = fontSize + 'px';
             }
         }
@@ -380,44 +322,17 @@
                 // Новая строка
                 currentLineIndex++;
                 currentPartIndex = 0;
-
                 if (currentLineIndex < parsedLines.length) {
-                    const nextLineParts = parsedLines[currentLineIndex];
-                    if (nextLineParts.length > 0) {
-                        displayArea.innerText = nextLineParts[0];
-                    } else {
-                        displayArea.innerText = "";
-                    }
+                    const nextParts = parsedLines[currentLineIndex];
+                    displayArea.innerText = nextParts.length > 0 ? nextParts[0] : "";
                 }
             } else {
-                // Добавляем слово/слог к текущей строке
+                // Добавление слова
                 const isSyllableMode = syllableModeCheckbox.checked;
-                // Если слоги - клеим без пробела, если слова - с пробелом
-                // (если ты хочешь пробелы и в слогах, замени "" на " ")
                 const separator = isSyllableMode ? "" : " "; 
-                
                 let textToShow = currentLineParts.slice(0, currentPartIndex + 1).join(separator);
                 displayArea.innerText = textToShow;
             }
 
-            // Вызываем подгонку шрифта после отрисовки текста
-            // requestAnimationFrame гарантирует, что браузер уже знает новый текст
-            requestAnimationFrame(fitText);
-        }
-
-        function resetApp(e) {
-            e.stopPropagation();
-            isStarted = false;
-            visualizerScreen.classList.add('hidden');
-            inputScreen.classList.remove('hidden');
-            displayArea.innerText = "";
-            textarea.value = ""; // Очистить ввод, если нужно
-        }
-        
-        // Пересчет шрифта при повороте экрана
-        window.addEventListener('resize', () => {
-             if(isStarted) fitText();
-        });
-    </script>
-</body>
-</html>
+            // ВАЖНО: Даем браузеру отрисовать текст, потом считаем размер
+            // Двойной requestAn
