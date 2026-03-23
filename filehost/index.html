@@ -3,75 +3,41 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Мои файлы</title>
+    <title>Файлы</title>
     <style>
         body {
             font-family: sans-serif;
             background: #ffffff;
-            color: #000000;
-            margin: 8px;
+            margin: 10px;
             padding: 0;
         }
+        /* Стиль для кнопки — крупная, легко попасть пальцем */
         .btn {
             display: block;
-            padding: 16px;
-            margin-bottom: 12px;
-            background: #e0e0e0;
+            background: #eeeeee;
             color: #000000;
             text-decoration: none;
-            border: 1px solid #999999;
-            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 1px solid #cccccc;
+            border-radius: 5px;
             font-size: 18px;
             text-align: center;
             word-wrap: break-word;
         }
-        .btn:active { 
-            background: #cccccc; 
-        }
-        #status { 
-            font-size: 14px; 
-            color: #666; 
-            text-align: center;
-            margin-top: 20px;
+        /* Реакция на нажатие */
+        .btn:active {
+            background: #dddddd;
         }
     </style>
 </head>
 <body>
-    <div id="file-list">
-        <div id="status">Ищем файлы...</div>
-    </div>
 
-    <script>
-        // ВАЖНО: Впиши свои данные сюда!
-        var user = "evideryt";
-        var repo = "webplayground";
+    <a class="btn" href="checkers.apk">Скачать шашки</a>
+    
+    <a class="btn" href="timer.mp3">Скачать секундомер</a>
+    
+    <a class="btn" href="document.pdf">Скачать document.pdf</a>
 
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "https://api.github.com/repos/" + user + "/" + repo + "/filehost/contents/", true);
-        
-        xhr.onload = function() {
-            var container = document.getElementById("file-list");
-            if (xhr.status === 200) {
-                var files = JSON.parse(xhr.responseText);
-                var html = "";
-                for (var i = 0; i < files.length; i++) {
-                    // Оставляем только файлы, исключаем сам index.html
-                    if (files[i].type === "file" && files[i].name !== "index.html") {
-                        // Генерируем кнопку для каждого файла (например, для APK)
-                        html += '<a class="btn" href="' + files[i].download_url + '">Скачать ' + files[i].name + '</a>';
-                    }
-                }
-                container.innerHTML = html !== "" ? html : "<p id='status'>Папка пуста</p>";
-            } else {
-                container.innerHTML = "<p id='status'>Ошибка загрузки API</p>";
-            }
-        };
-        
-        xhr.onerror = function() {
-            document.getElementById("file-list").innerHTML = "<p id='status'>Ошибка сети</p>";
-        };
-        
-        xhr.send();
-    </script>
 </body>
 </html>
